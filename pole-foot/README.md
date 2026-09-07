@@ -11,7 +11,8 @@ Full design spec, verification method and build log: `pole_foot_spec.md`
 
 | | |
 |---|---|
-| Overall | 32.80 x 30.80 x 44.00 mm |
+| Overall | 32.80 x 30.80 mm shaft, Ø35.00 mm at the base, 44.00 mm tall |
+| Base flare | Ø35.00 mm round, full width from z=0 to z=15, tapering to the shaft profile by z=21 |
 | Socket depth | 40.00 mm |
 | Floor under the pole | 4.00 mm |
 | Side wall | 1.50 mm |
@@ -20,7 +21,7 @@ Full design spec, verification method and build log: `pole_foot_spec.md`
 | Ridges | 8 x 0.40 mm proud, Ø1.6 rounded crest, full 40 mm |
 | Entry taper | ridges fade to the bore wall over the top 1.5 mm |
 | Chamfers | 0.8 bottom outer, 0.6 top outer, 0.6 bore mouth, 0.6 socket floor |
-| Material | 8.95 cm^3 |
+| Material | ~11.97 cm^3 |
 
 ## Fit
 

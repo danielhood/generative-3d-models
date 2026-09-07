@@ -30,6 +30,16 @@ top_chamfer   = 0.6;   // top outer edge, 45 deg
 lip_chamfer   = 0.6;   // bore mouth, 45 deg
 seat_chamfer  = 0.6;   // socket floor corner, keeps the pole seating flat
 
+/* [Base flare] */
+// The bottom of the foot flares out to a wider footprint for stability, then
+// tapers back in to the normal (elliptical) shaft profile. The flare is
+// round rather than elliptical - a circle hulls cleanly against the shaft
+// ellipse and there's no functional reason for the wide part to follow the
+// pole's cross-section.
+base_flare_d  = 35;     // exterior width of the widened base, circular
+base_flare_h  = 15;     // height of full-width flare, measured from the bottom
+base_taper_h  = 6;      // vertical run of the taper from the flare to the shaft
+
 /* [Fit] */
 clearance     = 0.4;   // outward offset cut into the bore, before ridges
 ridge_h       = 0.4;   // how far each ridge stands proud of the bore
@@ -63,6 +73,10 @@ module ell(off) {
     else offset(r = off) scale([a_nom, b_nom]) circle(r = 1, $fn = ell_fn);
 }
 
+// Round profile, used for the flared base - same segment count as the
+// ellipse so it hulls cleanly against it.
+module circ(d) circle(d = d, $fn = ell_fn);
+
 // Straight section between two heights.
 module prism(off, z0, z1) {
     translate([0, 0, z0]) linear_extrude(z1 - z0) ell(off);
@@ -78,11 +92,27 @@ module taper(off0, z0, off1, z1) {
     }
 }
 
+// Ruled taper between two arbitrary convex 2D profiles (children 0 and 1),
+// e.g. the round flare hulled against the elliptical shaft.
+module taper_shapes(z0, z1) {
+    hull() {
+        translate([0, 0, z0])          linear_extrude(hull_e) children(0);
+        translate([0, 0, z1 - hull_e]) linear_extrude(hull_e) children(1);
+    }
+}
+
 // ---- solids -----------------------------------------------------------
 module outer_solid() {
+    flare_top = base_flare_h + base_taper_h;   // height where the taper rejoins the shaft
     union() {
-        taper(outer_off - base_chamfer, 0, outer_off, base_chamfer);
-        prism(outer_off, base_chamfer, total_h - top_chamfer);
+        // bottom outer edge chamfer, on the round flare
+        taper_shapes(0, base_chamfer) { circ(base_flare_d - 2*base_chamfer); circ(base_flare_d); }
+        // full-width flare
+        translate([0, 0, base_chamfer]) linear_extrude(base_flare_h - base_chamfer) circ(base_flare_d);
+        // taper from the round flare down to the elliptical shaft profile
+        taper_shapes(base_flare_h, flare_top) { circ(base_flare_d); ell(outer_off); }
+        // normal shaft
+        prism(outer_off, flare_top, total_h - top_chamfer);
         taper(outer_off, total_h - top_chamfer, outer_off - top_chamfer, total_h);
     }
 }
