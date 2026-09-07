@@ -1,0 +1,64 @@
+# --- OS junk ---
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# --- Editors / IDEs ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# --- Python (helper/check scripts) ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# --- OpenSCAD ---
+# Backup files OpenSCAD writes next to the .scad you're editing
+*.scad~
+*.scad.bak
+# Auto-saved/incomplete exports
+*.stl.tmp
+*.off.tmp
+# OpenSCAD editor autosave/session files
+.openscad_autosave
+
+# --- FreeCAD ---
+*.FCBak
+*.FCStd1
+*.FCStd.lock
+
+# --- Blender ---
+*.blend1
+*.blend2
+*.blend[0-9]+
+
+# --- CAD/mesh caches & intermediate exports ---
+# Uncomment if you'd rather regenerate these from source (.scad/.py) than track them:
+# *.stl
+# *.off
+# *.amf
+# *.3mf
+# *.png
+# *.csg
+
+# --- Slicer output (if you ever export g-code alongside models) ---
+*.gcode
+
+# --- Logs / misc temp ---
+*.log
+*.tmp
+.cache/
