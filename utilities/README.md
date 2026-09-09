@@ -50,6 +50,25 @@ against it unreliable"** → `dxf_trace.py` + `projection_trace_recipe.scad`.
 Full worked example, including the specific defect this was built to work
 around, in `coasters/coaster_helm_of_awe_spec.md` sections 3 and 6 (C1, C2).
 
+**Do this first, every time you trace a source STL: find out whether the
+artwork is raised material or cut clean through the plate.** A `projection()`
+trace returns closed loops, and nothing in the loops themselves says which
+side of each one is solid. Get it backwards and you will be handed the
+artwork's *negative space* while believing you have the artwork, and every
+downstream boolean will be inverted — which is exactly what happened once
+here, and cost a build a phantom "OpenSCAD quirk" plus a pile of unnecessary
+connectivity scaffolding (`coasters/coaster_yggdrasil_spec.md` section 6,
+F1). Two cheap checks, both against the source mesh:
+
+    # 1. look at it: is the artwork solid, or is it a hole?
+    rasterize_z_slice(source_tris, z=<a flat face>).save("src.png")
+
+    # 2. ask the mesh what a traced polygon actually is
+    is_solid_at(source_tris, *centroid_of(polygon), z=<that face>)
+
+If (2) comes back False, the polygon is background: subtract it from a disc
+rather than extruding it.
+
 ## Background: the mistakes these encode
 
 Two build logs are worth reading in full before doing similar work, not just
@@ -66,7 +85,18 @@ skimming this table:
   expensive one — a wrong "proof" from a buggy verification script directly
   contradicting a correct direct observation, costing real time before the
   bug was found in the checker, not the part (C4). `mesh_query.py` and
-  `mesh_rasterize.py` exist specifically because of C4.
+  `mesh_rasterize.py` exist specifically because of C4. **Read C4 with its
+  correction header:** its headline conclusion (that `linear_extrude()`
+  violates set-subtraction semantics) was later retracted, and C3's
+  "pieces that don't touch" turned out to be a symptom of the same root
+  cause — see the next entry.
+
+- **`coasters/coaster_yggdrasil_spec.md` section 6 (F1)** — the retraction,
+  and the cheapest lesson in this folder: the traced polygons had been the
+  artwork's *negative space* the whole time, because the source insert was a
+  through-cut plate rather than a raised relief. Nobody asked the source
+  mesh what its own polygons meant. One `is_solid_at()` call would have
+  settled it.
 
 The short version of the C4 lesson, since it's the one most likely to repeat
 if not internalized: **when your own derived reasoning (math, a re-run
@@ -74,3 +104,10 @@ script, a theory about how a tool works) disagrees with a direct
 observation (a slicer/CAD viewer showing the actual file), suspect your
 reasoning first.** Verify against the real, final artifact — not a mental
 model of what it should be.
+
+And the F1 corollary, which is what actually closed C4 out: **verify the
+inputs the same way you verify the output.** C4's discipline was applied
+faithfully to the exported STL and never once to the source STL, so a
+mislabeled input survived every check and got blamed on the tool. When a
+tool appears to violate its own documented semantics, look at what you
+handed it before concluding the tool is wrong.

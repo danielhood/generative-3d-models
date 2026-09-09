@@ -1,25 +1,41 @@
-// Exact traced outline of the Helm of Awe emblem + guard ring, extracted
-// from insert-helm-of-awe.stl via a top-down projection(), decomposed into
-// its disconnected sub-shapes, and kept/excluded by distance from center:
-// hub + 8 tridents + 8 guard-ring gates kept (all reach within 45 mm of
-// center); the square's corner brackets, edge ticks, and border frame
-// excluded (all sit beyond 45.6 mm). See ../coaster_helm_of_awe_spec.md
-// section 3. One trident (of 8) had a self-touching vertex in the source
-// mesh -- consistent with G1's non-manifold finding -- so it was replaced
-// with a rotated copy of a clean trident rather than traced directly;
-// the design is 8-fold rotationally symmetric, so this is exact, not an
-// approximation.
+// Exact traced outline of the NEGATIVE SPACE of the Helm of Awe design
+// (Ægishjálmur), extracted from insert-helm-of-awe.stl via a top-down
+// projection() and decomposed into its disconnected sub-shapes. Kept: every
+// component reaching within 45 mm of center (32 pieces); excluded: the
+// square's corner brackets, edge ticks and border frame, all beyond
+// 45.6 mm. See ../coaster_helm_of_awe_spec.md section 3.
 //
-// These 32 pieces do not touch each other -- the source artwork holds them
-// a deliberate ~2.3-4.6 mm apart, relying on a solid backing plate in its
-// original project. coaster_helm_of_awe.scad supplies the connectivity here
-// (a structural rim + hub disc) rather than this file.
+// Read the name carefully: these 32 polygons are the *background* -- the
+// open areas between the emblem's hub, tridents and guard-ring gates -- not
+// the emblem. The source insert is a square plate with the design cut clean
+// through it, so the emblem itself is whatever is left of a disc after
+// these are removed. Callers therefore subtract this module from a disc;
+// they do not extrude it directly. A caller that unioned it would get the
+// design inside out.
 //
-// Native scale, centered on the emblem's own center. Callers scale/extrude.
+// This was originally misread: the file was named for the emblem and its
+// polygons described as hub/tridents/ring, which made the (perfectly
+// literal) difference() in coaster_helm_of_awe.scad look like it was
+// violating set-subtraction semantics, and made the 32 pieces' inability to
+// touch each other look like a connectivity defect needing bridge tabs.
+// Both were artifacts of the mislabeling. Settled by asking the source mesh
+// directly -- mesh_query.is_solid_at() on all 32 polygon centroids returns
+// material for 0 of them. Renamed 2026-09-08; geometry byte-for-byte
+// unchanged. Full account: ../coaster_yggdrasil_spec.md section 6, F1.
+//
+// The source mesh IS separately non-manifold (1 edge not shared by exactly
+// 2 faces, 2 mismatched directed edges) -- that part of the build log holds
+// up. One component of the trace had a self-touching vertex and would not
+// walk into a simple loop; because the design is 8-fold rotationally
+// symmetric, it was replaced with a rotated copy of a clean instance of the
+// same feature rather than repaired. Exact, not an approximation. See
+// ../coaster_helm_of_awe_spec.md section 6, C1 and C2.
+//
+// Native scale, centered on the design's own center. Callers scale/extrude.
 
 native_max_r = 42.382;
 
-module helm_of_awe_emblem_native() {
+module helm_of_awe_background_native() {
     union() {
         polygon(points=[[1.2181,42.2309], [3.0954,42.1352], [4.9504,41.9586], [6.7812,41.7029], [8.5863,41.3700], [8.0713,39.9553], [7.4130,38.6503], [6.6249,37.4701], [5.7209,36.4298], [4.7145,35.5446], [4.1772,35.1649], [3.6194,34.8295], [3.0429,34.5406], [2.4494,34.2998], [1.8405,34.1092], [1.2181,33.9706]]);
         polygon(points=[[-1.9277,34.0879], [-2.5447,34.2716], [-3.1453,34.5058], [-3.7281,34.7888], [-4.2912,35.1188], [-4.8332,35.4940], [-5.3524,35.9128], [-5.8471,36.3734], [-6.7568,37.4130], [-7.5493,38.5992], [-8.2116,39.9180], [-8.7307,41.3557], [-6.9096,41.6943], [-5.0625,41.9543], [-3.1907,42.1338], [-1.2960,42.2309], [-1.2960,33.9563]]);

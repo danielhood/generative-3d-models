@@ -3,13 +3,21 @@ typically the top or bottom face of a `linear_extrude()`d part. Used by
 mesh_query.py (point lookup) and mesh_rasterize.py (visual ground truth).
 
 Both of those exist because of one hard lesson (see
-coasters/coaster_helm_of_awe_spec.md section 6, C4): for a 2D shape with
-many disjoint contours, `linear_extrude()` does not reliably behave like a
-literal set-subtraction of its 2D CSG tree. Don't trust a mental model of
-"what the boolean should produce," and don't trust OpenSCAD's own preview
-either (a separate, earlier lesson -- pole-foot's C10). The only source of
-truth is the actual exported mesh. These two tools query and visualize that
-directly, with no OpenSCAD or rendering pipeline in between.
+coasters/coaster_helm_of_awe_spec.md section 6, C4). That entry originally
+concluded that `linear_extrude()` of a multi-contour 2D `difference()` does
+not follow literal set-subtraction semantics. That conclusion was WRONG and
+has since been retracted -- there is no such quirk; the traced polygons
+being subtracted were the artwork's negative space, mislabeled as the
+artwork (full account: coasters/coaster_yggdrasil_spec.md section 6, F1).
+Booleans behave as documented.
+
+What survives, and why these tools are still worth reaching for: don't trust
+a mental model of "what the boolean should produce," and don't trust
+OpenSCAD's own preview either (a separate, earlier lesson -- pole-foot's
+C10). The only source of truth is the actual exported mesh. These two tools
+query and visualize that directly, with no OpenSCAD or rendering pipeline in
+between -- and note that the same tools work just as well pointed at a
+*source* mesh, which is what would have caught the mislabeling immediately.
 """
 
 

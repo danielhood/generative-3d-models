@@ -186,6 +186,34 @@ makes the whole rim/hub-disc union unnecessary.
 
 #### C4 — Getting the fill direction right needed real verification, not just a look
 
+> **CORRECTION (2026-09-08, added during the Yggdrasil coaster build).**
+> The conclusion below — that `linear_extrude()` of a multi-contour 2D
+> `difference()` violates literal set-subtraction semantics — is **wrong**.
+> There is no OpenSCAD/CGAL quirk. The polygons in
+> `cad/helm_of_awe_pattern.scad` (renamed 2026-09-08 from
+> `helm_of_awe_emblem.scad`) are the emblem's **negative space**, not the
+> emblem: `insert-helm-of-awe.stl` is a plate with the design cut clean
+> through it, and the trace picked up the background regions between the
+> emblem's lines. Subtracting those from a disc leaves the emblem, which is
+> exactly what every viewer and the rasterizer showed. `difference()`
+> behaved normally throughout.
+>
+> Settled against real meshes, not reasoning: rasterizing the source plate's
+> own face triangles shows it is a through-cut (emblem solid, background
+> open), and `mesh_query.is_solid_at()` on the area centroid of each of the
+> 32 traced polygons reports **0 of 32 on material, 32 of 32 in the cut-out
+> background**.
+>
+> This also explains C3 above: background regions separated by the emblem's
+> lines can never touch each other, so the bridge tabs and the rim+hub
+> scaffolding were solving a problem created by the mislabeling, not by the
+> artwork. The part itself is unaffected and correct — only the explanation
+> was wrong. Full write-up: `coaster_yggdrasil_spec.md` section 6, F1.
+>
+> The original entry is left below unedited, as the record of what was
+> believed at the time.
+
+
 **Symptom.** Rev D's construction (previous entry) had the pattern as solid
 material directly — correct by construction, nothing to invert. But your
 next two requests ("the center is lost" / "invert the fill, keep the ring")
@@ -266,15 +294,19 @@ and FreeCAD:
       coaster_helm_of_awe_spec.md       (this file)
       coaster_helm_of_awe.stl           (final export)
       cad/
-        helm_of_awe_emblem.scad         -- traced pattern polygons (32 pieces: hub + 8 tridents + 8 ring gates), native scale
+        helm_of_awe_pattern.scad        -- traced polygons (32 pieces): the emblem's NEGATIVE SPACE, native scale.
+                                           Renamed 2026-09-08 from helm_of_awe_emblem.scad; module
+                                           helm_of_awe_emblem_native() -> helm_of_awe_background_native().
+                                           Geometry unchanged -- the rebuilt STL is byte-identical.
         coaster_helm_of_awe.scad         -- centers, scales, and extrudes (section 6, C4)
 
 ## 9. Open items
 
 - **Not yet printed.** Everything above is mesh-verified and confirmed in
   two independent viewers (OrcaSlicer, FreeCAD), but not print-verified.
-- **The C4 `linear_extrude` fill behavior is empirically confirmed, not
-  fully explained.** It reliably produces the correct, desired result for
+- **~~The C4 `linear_extrude` fill behavior is empirically confirmed, not
+  fully explained.~~ Resolved 2026-09-08 — there was no quirk; see the
+  correction at the head of C4. The item below is superseded.** It reliably produces the correct, desired result for
   this specific design and should keep doing so under the small parameter
   tweaks in section 7 (scale, rim width) — but if the pattern geometry is
   ever restructured significantly, re-verify the fill by rasterizing the
