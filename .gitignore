@@ -62,3 +62,7 @@ env/
 *.log
 *.tmp
 .cache/
+
+# --- generated trace intermediates (see coasters/trace_tree_of_life.py) ---
+.tree_trace.dxf
+.tree_trace.scad
