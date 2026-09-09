@@ -165,3 +165,95 @@ def classify_by_radius(components, center, keep_max_rmin):
         rmin = min(math.hypot(x - cx, y - cy) for x, y in pts)
         (kept if rmin <= keep_max_rmin else excluded)[root] = edges
     return kept, excluded
+
+
+# ---------------------------------------------------------------------------
+# Repair for the "Known failure mode" (C2) described at the top of this file.
+#
+# walk_polygon() gives up on a component whose curve touches itself: it
+# returns a stub, is_clean_walk() says False, and the original advice here
+# was to drop that component or substitute a rotated copy of a symmetric
+# twin. Both are lossy, and neither works if the shape has no twin.
+#
+# trace_faces() just solves it. Treat the component as a planar graph and
+# walk its faces: on arriving at a vertex, leave by the edge that is next
+# CLOCKWISE from the reversed incoming edge. That traversal visits every
+# face exactly once; interior faces come back counter-clockwise (positive
+# area) and the single outer face clockwise (negative). Keep the positive
+# ones over some small area floor and you have the component's real
+# polygons, self-touch and all.
+#
+# On coasters/Insert-tree.stl this recovered all 3 of the tree's 62
+# components that walk_polygon could not close. Each turned out to be a
+# simple loop carrying a zero-area spur -- a duplicated edge traversed in
+# both directions -- rather than a genuine figure-eight, which is why the
+# areas came back as a clean +/- pair plus a 0.0.
+#
+#     from dxf_trace import trace_faces, polygon_area
+#     if not is_clean_walk(loop, edges):
+#         for f in trace_faces(edges):
+#             if polygon_area(f) > 0.02:
+#                 use(f)
+# ---------------------------------------------------------------------------
+
+def polygon_area(poly):
+    """Signed area of a point list (positive = counter-clockwise)."""
+    s = 0.0
+    n = len(poly)
+    for i in range(n):
+        x1, y1 = poly[i]
+        x2, y2 = poly[(i + 1) % n]
+        s += x1 * y2 - x2 * y1
+    return s / 2.0
+
+
+def trace_faces(edges, tol=1e-6):
+    """Decompose one component's edge list into its simple closed faces.
+
+    Returns a list of point lists. Interior faces have positive area, the
+    outer boundary negative, and degenerate spurs come back at 0.0 -- so
+    filter on `polygon_area(f) > <small>` to get the usable polygons."""
+    def k(p):
+        return (round(p[0] / tol) * tol, round(p[1] / tol) * tol)
+
+    pos = {}
+    adj = defaultdict(list)
+    for a, b in edges:
+        ka, kb = k(a), k(b)
+        if ka == kb:
+            continue
+        pos[ka] = a
+        pos[kb] = b
+        adj[ka].append(kb)
+        adj[kb].append(ka)
+
+    order = {}
+    for v, nbrs in adj.items():
+        uniq = []
+        for n in nbrs:
+            if n not in uniq:
+                uniq.append(n)
+        uniq.sort(key=lambda n: math.atan2(n[1] - v[1], n[0] - v[0]))
+        order[v] = uniq
+    idx = {v: {n: i for i, n in enumerate(ns)} for v, ns in order.items()}
+
+    visited = set()
+    faces = []
+    for v in order:
+        for w in order[v]:
+            if (v, w) in visited:
+                continue
+            face = []
+            cv, cw = v, w
+            while True:
+                visited.add((cv, cw))
+                face.append(cv)
+                ns = order[cw]
+                nxt = ns[(idx[cw][cv] - 1) % len(ns)]
+                cv, cw = cw, nxt
+                if (cv, cw) == (v, w):
+                    break
+                if len(face) > len(edges) + 5:
+                    break
+            faces.append([pos[p] for p in face])
+    return faces
