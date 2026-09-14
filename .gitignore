@@ -63,6 +63,11 @@ env/
 *.tmp
 .cache/
 
-# --- generated trace intermediates (see coasters/trace_tree_of_life.py) ---
+# --- generated trace intermediates (see coasters/trace_*.py) ---
+# Each trace script deletes its own in a finally block, so these should
+# never survive a run -- including an aborted or --check one. Listed anyway
+# for the run that gets killed between writing and cleaning up.
 .tree_trace.dxf
 .tree_trace.scad
+.triskele_trace.dxf
+.triskele_trace.scad

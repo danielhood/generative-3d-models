@@ -34,8 +34,9 @@ Requires Pillow, via `raster.py`.
 """
 import math
 
-from dxf_trace import (group_into_components, is_clean_walk, parse_dxf_lines,
-                       polygon_area, trace_faces, walk_polygon)
+from dxf_trace import (drop_spurs, group_into_components, is_clean_walk,
+                       parse_dxf_lines, polygon_area, trace_faces,
+                       walk_polygon)
 
 
 def component_polygons(edges, min_area=0.02):
@@ -44,12 +45,18 @@ def component_polygons(edges, min_area=0.02):
     Tries `walk_polygon` first and falls back to `trace_faces` for the
     self-touching components that defeat it, so callers stop having to
     special-case `dxf_trace`'s documented C2 failure mode. Returns a list
-    because a genuinely self-touching component yields more than one."""
+    because a genuinely self-touching component yields more than one.
+
+    Every polygon then goes through `drop_spurs`, which deletes zero-area
+    excursions. Do not skip that on the grounds that they enclose no area:
+    a polygon that touches itself at a point extrudes into a mesh that is
+    correct in every respect except that it is not watertight, and both
+    paths above can emit one (coasters/coaster_triskele_spec.md, E2)."""
     loop = walk_polygon(edges)
     if is_clean_walk(loop, edges):
         p = loop[:-1]
-        return [p if polygon_area(p) > 0 else p[::-1]]
-    return [f for f in trace_faces(edges) if polygon_area(f) > min_area]
+        return [drop_spurs(p if polygon_area(p) > 0 else p[::-1])]
+    return [drop_spurs(f) for f in trace_faces(edges) if polygon_area(f) > min_area]
 
 
 def trace_dxf(path, keep=None, min_area=0.02, verbose=True):

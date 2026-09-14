@@ -21,7 +21,7 @@ path, or just `cd` into it.
 | `mesh_slice.py` | Shared helpers (`flat_triangles_at_z`, `point_in_triangle`) for working with one flat Z-slice of a mesh — e.g. the top face of a `linear_extrude()`d part. Used by the next two. |
 | `mesh_query.py` | **The "isSolid" test.** `is_solid_at(tris, x, y, z)` — is there material at this point? Read the module docstring before using this on anything high-stakes: an earlier version of this idea had a real bug that produced a confidently-wrong answer, and the docstring explains exactly what went wrong and why this version is checked against the *actual exported mesh* instead. |
 | `mesh_rasterize.py` | Rasterize a flat Z-slice straight to a PNG by filling real mesh triangles — no OpenSCAD, no camera/projection math. The ground-truth visual check when a render, a preview, or your own math disagrees with what a part should look like. |
-| `dxf_trace.py` | Extract exact 2D artwork (as ordered polygons) from a relief/engraving on an STL, including a *non-manifold* one that can't be booleaned directly. Pairs with `projection_trace_recipe.scad`. Its `trace_faces()` **repairs the self-touching components that `walk_polygon()` gives up on** -- the C2 failure mode this file used to tell you to drop or fake. |
+| `dxf_trace.py` | Extract exact 2D artwork (as ordered polygons) from a relief/engraving on an STL, including a *non-manifold* one that can't be booleaned directly. Pairs with `projection_trace_recipe.scad`. Its `trace_faces()` **repairs the self-touching components that `walk_polygon()` gives up on** -- the C2 failure mode this file used to tell you to drop or fake. Its `drop_spurs()` deletes zero-area excursions from a traced loop, which is **a mesh-validity repair and not a cosmetic one**: a polygon that touches itself at a point renders the correct shape and extrudes into a mesh that is not watertight. |
 | `edt.py` | Exact Euclidean distance transform on a 0/1 raster, plus `erode`/`dilate`/`opening` built on it. The measuring instrument under `printability.py`, and the way to enforce a minimum feature width instead of hoping for one. Read its header before editing it: the textbook version of this algorithm is subtly wrong in floating point and fails *large*, silently, while passing small unit tests. |
 | `printability.py` | **Will this actually print?** Minimum material/hole widths, and an erosion ladder that answers the question `mesh_check.py` cannot: does the part stay in one piece when everything thinner than 2r is gone. Run it on any openwork part before calling it done. |
 | `raster.py` | Binary masks over a mm grid: build from a mesh slice or from polygons, combine (`AND`/`OR`/`SUB`/`NOT`), label components, score `iou`, measure area, dump a PNG or a width heat-map. The substrate under the two files above. Uses PIL to *fill polygons* and nothing else — every boolean is explicit bytearray logic, because `ImageChops` on mode-`"1"` images does not mean what it looks like (see D8). |
@@ -59,6 +59,16 @@ Tree of Life source is the worked example: 1 shell, watertight, perfect
 bounding box -- and its entire rim detaches from the middle of the coaster
 at 0.20 mm of erosion, which is exactly how it failed when it was printed
 (`coasters/coaster_tree_of_life_spec.md` sections 3 and 7).
+
+**"Should I add an `offset(+r) offset(-r)` opening for safety?"** -> Only if
+you have measured that the artwork needs one. An opening is a **repair, not
+a safety margin**: it is a lossy operation that pays for itself on artwork
+genuinely too thin and costs on artwork that is not. On the triskele coaster
+it changed the erosion ladder by nothing at all and *tripled* the number of
+sub-0.4 mm material slivers (37 -> 117), because `offset()` at finite `$fn`
+re-facets every polygon point and sheds slivers of its own along each curve.
+Be willing to ship a part with no repair steps
+(`coasters/coaster_triskele_spec.md` section 6, E1).
 
 **"I need to reuse artwork/a relief from an existing STL, and it needs to be
 recut, rescaled, or the source file has some defect that makes booleans
@@ -146,6 +156,21 @@ skimming this table:
   right. And two cases of a checker being wrong rather than the part (D7,
   D8) -- one of them the distance transform itself, which reported a 112 mm
   inscribed width inside a 100 mm disc.
+
+- **`coasters/coaster_triskele_spec.md` section 6** -- the first source in
+  this repo that needed no repair at all, and the two things that went wrong
+  anyway. E1: an opening carried over from the previous build "for safety"
+  left the erosion ladder untouched and tripled the part's hairline slivers.
+  E2: two traced polygons each visited one vertex twice, enclosing 2.3e-6
+  mm^2 between the visits, and `linear_extrude()` turned each of those
+  points into an edge shared by four faces -- so the export was the right
+  size, the right volume, one shell, visually perfect, and **not
+  watertight**. The Tree of Life build had found the same spurs and
+  dismissed them as harmless because they carry no area. They are not; the
+  cleanup is now in `dxf_trace.drop_spurs()`. Also E3, the fourth distinct
+  plate orientation in four coasters (this one lies in YZ, not XZ) -- and
+  the first that was right on the first attempt, because `orientation_iou()`
+  scores all four variants in one call instead of being re-derived by hand.
 
 The short version of the C4 lesson, since it's the one most likely to repeat
 if not internalized: **when your own derived reasoning (math, a re-run

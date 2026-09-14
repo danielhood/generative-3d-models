@@ -207,6 +207,51 @@ def polygon_area(poly):
     return s / 2.0
 
 
+def drop_spurs(poly, max_area=1e-3, tol=1e-4):
+    """Remove zero-area excursions from a closed polygon.
+
+    A traced loop can visit the same point twice and enclose nothing
+    between the two visits -- an edge walked out and back, or a two- or
+    three-step wander along a curve that returns where it started. The
+    Tree of Life build found these and dismissed them as harmless because
+    they carry no area (its spec, section 6, D3). They are not harmless.
+
+    A polygon that touches itself at a point is still a valid `polygon()`
+    to OpenSCAD and still renders the correct shape, but `linear_extrude()`
+    turns that point into a vertical edge shared by FOUR side faces instead
+    of two. The result is a mesh that is the right size, the right volume,
+    a single shell, visually perfect -- and not watertight. Two arcs on the
+    triskele coaster did exactly this, for spurs of 2.3e-6 mm^2 (see
+    coasters/coaster_triskele_spec.md section 6, E2).
+
+    So this is a mesh-validity repair, not a cosmetic one, and it is worth
+    doing to every traced polygon rather than only to the ones that needed
+    `trace_faces()`: one of the three spurs found on that coaster came out
+    of a component that `walk_polygon` had walked perfectly cleanly.
+
+    A repeated vertex enclosing REAL area is left alone -- that is a
+    genuine figure-eight, which is `trace_faces`'s job to split, not this
+    one's. `max_area` is deliberately far below any feature worth keeping
+    (1e-3 mm^2 is a 30 micron square) and far above float noise.
+    """
+    def k(p):
+        return (round(p[0] / tol) * tol, round(p[1] / tol) * tol)
+
+    poly = list(poly)
+    again = True
+    while again:
+        again = False
+        seen = {}
+        for i, p in enumerate(poly):
+            key = k(p)
+            if key in seen and abs(polygon_area(poly[seen[key]:i])) <= max_area:
+                poly = poly[:seen[key]] + poly[i:]
+                again = True
+                break
+            seen[key] = i
+    return poly
+
+
 def trace_faces(edges, tol=1e-6):
     """Decompose one component's edge list into its simple closed faces.
 
