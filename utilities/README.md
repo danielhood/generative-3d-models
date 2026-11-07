@@ -28,6 +28,7 @@ path, or just `cd` into it.
 | `mesh_orient.py` | Get a plate-like source mesh into the XY plane: find the thickness axis, find its flat faces (and spot blind pockets that are *not* through features), remap. Read its warning — this is where orientation bugs are born, and it cannot check your work. |
 | `pattern_trace.py` | **The source-insert -> pattern-`.scad` pipeline**, with the two checks every coaster here has failed at least once: `sense_of()` (is a traced loop the artwork or the hole around it?) and `orientation_iou()` (which way up, and from which side?). Also `component_polygons()`, which hides the walk-or-repair decision, and `emit_scad()`. Worked example: `coasters/trace_tree_of_life.py`. |
 | `projection_trace_recipe.scad` | The OpenSCAD half of `dxf_trace.py`'s recipe: flatten a relief to 2D and export to DXF. |
+| `slvs_write.py` | **Write SolveSpace `.slvs` files from Python.** Groups, workplanes at any orientation, line/arc requests, params, constraints — plus `dof_report()`, which row-reduces each group's Jacobian to say whether it is actually constrained. The handle arithmetic and the format's quirks are in its docstring; the traps that bite are in the "when to reach for which" entry below. |
 
 ## When to reach for which
 
@@ -110,6 +111,71 @@ polygons a centroid-based test returned 28/62, an even split that reads as
 "this trace mixes both senses" and is really just the probe missing the
 shape. The interior-point version returns 0/62. Expect near-unanimity from
 this check and treat anything else as a stop, not a majority vote.
+
+**"I need to build a SolveSpace model from measured numbers rather than by
+clicking"** -> `slvs_write.py`, and read
+`mtg-deck-boxes/ultra_guard_pro_100_spec.md` section 6 first. Four things
+there will cost you a session each if you rediscover them:
+
+1. **A line's identity is `(request << 16) | 0`, not the request handle.**
+   Get it wrong and SolveSpace silently deletes every constraint that
+   references a line -- `EntityExists()` treats handle 0 as "fine, doesn't
+   apply", and `HORIZONTAL`/`VERTICAL`/`POINTS_COINCIDENT` are excluded from
+   the "elements were deleted" count, so nothing is reported. The exported
+   mesh is unaffected, because the seeded `Param` values already hold the
+   right coordinates. **Always `solvespace-cli regenerate` a copy and
+   `grep -c AddConstraint` before and after** -- that is the only cheap way
+   to see it.
+2. **Never extrude a sketch along anything but its own plane normal** if the
+   result takes part in a boolean. A skewed extrude produces correct
+   geometry and then fails the NURBS boolean outright (`trim was empty`,
+   self-intersecting mesh). The `ONE_SKEWED` subtype does not help. Put the
+   slant in the *profile* on a plane you extrude squarely instead.
+3. **`SYMMETRIC_HORIZ` is symmetry about the vertical axis** (same v,
+   opposite u -- for a *horizontal* edge's two ends), and it replaces
+   `HORIZONTAL` on that edge rather than joining it.
+4. **Params are only initial guesses** ("params are regenerated, but we want
+   to preload the values", `file.cpp`), and that one fact is what makes
+   every other check unreliable. A group can be rank-deficient -- redundant
+   *and* under-constrained at once, or not even at a solution -- and still
+   export a perfect mesh, survive `regenerate` untouched, and pass a jitter
+   test, because the solver starts at the answer and has nothing to do. Only
+   the GUI reports it, as "unsolvable constraints". **Run
+   `slvs_write.dof_report()`**: it rebuilds each group's equations from what
+   you emitted, takes a numeric Jacobian and row-reduces it, so
+   `redundant = eqs - rank` and `dof = unknowns - rank` both have to be
+   zero. This caught a shipped file that passed everything else
+   (`mtg-deck-boxes/ultra_guard_pro_100_spec.md` 6.7).
+
+Two more that cost a cycle each: `ANGLE` constrains the **direction cosine**
+of two line vectors, so two edges of a loop that run in opposite directions
+need `other=True` or you are asking for `180 - theta`; and `PT_ON_LINE`
+carries its own extra parameter (`Constraint.valP`) and emits a full vector
+equation, so it is not the one-equation constraint it looks like.
+
+`AddEntity` records can be omitted entirely and `Group.remap` can be `{}` --
+SolveSpace rebuilds both on load.
+
+**Text** (`Sketch.text()`; `mtg-deck-boxes/cad/text_fit.py` for fitting it):
+a TrueType text request has only **two free points** -- top-left and
+bottom-left, whose separation is the cap height. The right-hand corners are
+pinned to them by four equations of their own, so the group wants four
+constraints from you (position x/z, "directly above", height); a text with no
+height is quietly 2 DOF short. The stored aspect ratio (advance / cap height)
+is load-bearing and cannot be computed without FreeType, so let
+`solvespace-cli regenerate` write it back. Fit text by its **ink box** off an
+extruded mesh, not by cap height or advance width: round glyphs overshoot the
+cap height (here 3.75%) and side bearings shift the centre. And **a font that
+is not installed does not fall back** -- it draws a big X -- so use the
+bundled `BitstreamVeraSans-Roman-builtin.ttf` unless every machine that opens
+the file has your font.
+
+And one that will waste your time in git rather than in CAD:
+`solvespace-cli export-mesh` is **nondeterministic**. Three runs over an
+unchanged `.slvs` at the same chord tolerance produced three different STLs,
+with differing triangle counts, all geometrically identical (same volume to
+0.001 mm^3, same bbox, watertight). The `.slvs` is reproducible; the mesh
+exported from it is not.
 
 **And check the orientation in the same breath** —
 `pattern_trace.orientation_iou()`. It is a separate failure and a sneakier
