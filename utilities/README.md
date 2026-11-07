@@ -156,6 +156,20 @@ equation, so it is not the one-equation constraint it looks like.
 `AddEntity` records can be omitted entirely and `Group.remap` can be `{}` --
 SolveSpace rebuilds both on load.
 
+**Text** (`Sketch.text()`; `mtg-deck-boxes/cad/text_fit.py` for fitting it):
+a TrueType text request has only **two free points** -- top-left and
+bottom-left, whose separation is the cap height. The right-hand corners are
+pinned to them by four equations of their own, so the group wants four
+constraints from you (position x/z, "directly above", height); a text with no
+height is quietly 2 DOF short. The stored aspect ratio (advance / cap height)
+is load-bearing and cannot be computed without FreeType, so let
+`solvespace-cli regenerate` write it back. Fit text by its **ink box** off an
+extruded mesh, not by cap height or advance width: round glyphs overshoot the
+cap height (here 3.75%) and side bearings shift the centre. And **a font that
+is not installed does not fall back** -- it draws a big X -- so use the
+bundled `BitstreamVeraSans-Roman-builtin.ttf` unless every machine that opens
+the file has your font.
+
 And one that will waste your time in git rather than in CAD:
 `solvespace-cli export-mesh` is **nondeterministic**. Three runs over an
 unchanged `.slvs` at the same chord tolerance produced three different STLs,

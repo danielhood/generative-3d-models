@@ -5,8 +5,9 @@ Parts: `cad/build_ugp100.py` -> `ultra_guard_pro_100_bottom.slvs`,
 Source: `orig/Ultra_Guard_Pro_100+_bottom-BLANK.stl`,
 `orig/Ultra_Guard_Pro_100+_top-tight.stl`
 Verification: `cad/check_ugp100.py`
-Revision: rev B, 2026-11-07. First part in this repo built in SolveSpace
-rather than OpenSCAD. rev B adds the lead-in bevel at the groove mouth (D5).
+Revision: rev C, 2026-11-07. First part in this repo built in SolveSpace
+rather than OpenSCAD. rev B added the lead-in bevel at the groove mouth (D5);
+rev C adds the engraved "MTG" label on the bottom's front face (D10).
 Status: **modelled and mesh-verified against the source STLs; not yet
 printed.**
 
@@ -52,6 +53,7 @@ Assembled: 78.234 x 86.062 x 102.05 mm exterior.
 | R6 | Parametric and editable in SolveSpace, not a dumb solid | implied by "solvespace files" |
 | R7 | Each rebuilt half should still mate with the original other half | reading of R2 |
 | R8 | Watertight, single-shell, printable meshes | repo standard |
+| R9 | Engraved text on the bottom's front face, in a centred 70 x 20 mm panel, ~3 mm deep, not through the wall | rev C request |
 
 ---
 
@@ -236,6 +238,43 @@ coincident faces, and each triangle is drawn `CHAMFER_OVER` back along both
 legs — which leaves the hypotenuse on the same line while lifting the legs
 off the groove wall and the seam face, for the same reason.
 
+**D10 — The label.** "MTG" is cut into the **front (-y) face** of the bottom,
+in Bitstream Vera Sans, 3.000 mm deep, fitted to a 70 x 20 mm panel centred on
+the face. Several of these were judgment calls on an ambiguous brief:
+
+* **"Front" is the low wide face.** The bottom has two wide faces: 78.2 x
+  27.25 mm at -y (where the seam is lowest) and 78.2 x up to 74.5 mm at +y. A
+  70 x 20 panel is in the proportions of the first (3.5 : 1 against 2.9 : 1)
+  and would look lost on the second, so -y. It is `P.PANEL_ZC` and the sign of
+  `y_plane` if the other face is meant.
+* **The text fills the panel; the panel itself is not cut.** I read "a 70 x
+  20 centred panel" as the area the text is fitted into, not as a recessed
+  rectangle with raised letters. For "MTG" the *height* binds, not the width:
+  the ink is 2.84 x 1.04 cap-heights against a 3.5 : 1 panel, so the cap height
+  is 19.27 mm, the ink 54.7 x 19.99 mm, and it sits centred in the 70 mm with
+  7.7 mm to spare each side. A longer string would flip to width-limited and
+  the fit handles that. If a recessed panel with raised letters is what was
+  meant, it is a different cut (panel minus text) and worth saying now.
+* **Cap height is rounded down to 0.01 mm**, so the dimension in the GUI is
+  19.27 rather than 19.2774...; the ink is 0.007 mm inside the 20 mm limit.
+* **Depth leaves 1.78 mm of wall** (the wall is 4.78 mm). `ugp100_params.py`
+  asserts at least 1.2 mm — three 0.4 mm perimeters — so a deeper cut or a
+  thinner wall fails the build instead of printing a translucent wall.
+* **The font is the one SolveSpace bundles, not Verdana.** Verdana is not
+  installed here and is not redistributable. A request naming a font the
+  machine lacks does not fall back — SolveSpace draws a big X — so a system
+  font would make the file fail on any machine without it. Bitstream Vera Sans
+  (`BitstreamVeraSans-Roman-builtin.ttf`) is compiled in, so it resolves
+  everywhere, and it is a close Verdana relative: wide, open, large x-height.
+  A different font is one parameter, `TEXT_FONT`, but it should be one that
+  is on every machine that will open the file.
+
+Margins on the face: 9.58 mm to each side's corner tangent, 3.63 mm above
+and below. Measured off the exported mesh, the pocket floor is one plane at
+y = -40.0308 (3.0000 deep), the ink is centred on the panel to 0.0000 mm, and
+the volume removed is 1108.35 mm^3 against a floor area x depth of 1108.35 —
+so the cutter touched nothing but the label.
+
 ---
 
 ## 5. Verified dimensions
@@ -279,7 +318,7 @@ SolveSpace, for the reason in 6.7.
 
 | | sketch groups | largest group |
 |---|---|---|
-| bottom | 6 | `outer-profile`, 40 unknowns / 40 equations / rank 40 |
+| bottom | 7 | `outer-profile`, 40 unknowns / 40 equations / rank 40; `text-plane`, 8 / 8 / 8 |
 | top | 7 | `outer-profile`, 40 / 40 / rank 40 |
 
 The extrude groups carry 3 unconstrained params each (their extrusion
@@ -290,12 +329,14 @@ vector) and the report lists them as such; see 7.3.
 | | triangles | shells | watertight | volume |
 |---|---|---|---|---|
 | bottom, original | 14 350 | 1 | yes | 90 637.6 mm^3 |
-| bottom, rebuild | 260 | 1 | yes | 91 019.7 mm^3 (+0.42%) |
+| bottom, rebuild (with label) | 760 | 1 | yes | 89 911.3 mm^3 (-0.80%) |
 | top, original | 12 832 | 1 | yes | 91 094.8 mm^3 |
 | top, rebuild | 284 | 1 | yes | 91 876.9 mm^3 (+0.86%) |
 
-The rebuilds are slightly heavier because every omitted feature (D3, D5, D6)
-*removes* material in the original. 55x and 45x fewer triangles.
+Without the label the bottom is 260 triangles and 91 019.7 mm^3 (+0.42%): the
+rebuilds are slightly heavier because every omitted feature (D3, D5, D6)
+*removes* material in the original. The label takes 1108.4 mm^3 and 500
+triangles back out of that.
 
 ### Assembly
 
@@ -512,6 +553,56 @@ constraints — and every check used here tested only the first.** An exported
 mesh cannot distinguish a sketch held by its constraints from a sketch held
 by nothing at all, because both export the same triangles.
 
+### 6.8 Text: the format is two free points, and everything else is measured
+
+Adding the label needed three things that are not obvious from the file
+format, and one that is a SolveSpace behaviour to design around.
+
+**A text request has two free points, not four.** `point[0]` is the
+**top-left** and `point[1]` the **bottom-left** of the first glyph, so their
+separation *is* the cap height; the text runs along `(v x normal)` and is
+`aspectRatio` cap-heights long. Points 2 and 3 (the right-hand corners) look
+like free sketch points but are not: `EntityBase::GenerateEquations` pins them
+to the first two with four equations. So the group has 8 unknowns and 4
+equations of its own, and wants four constraints of yours — which is
+bottom-left x, bottom-left z, "directly above", and the height. `dof_report()`
+now models those four (rank 8 of 8). A text with only a position and no height
+looks plausible and is quietly 2 DOF short.
+
+**The aspect ratio is a stored, load-bearing number you cannot compute.** It is
+advance width over cap height and it is what the two derived points are pinned
+to, so a wrong seed leaves them off their equations. Computing it means
+reimplementing FreeType. `cad/text_fit.py` instead builds a throwaway sketch,
+lets `solvespace-cli regenerate` write back the value SolveSpace computed, and
+extrudes the text to read the **ink box** off the mesh. That second part
+matters: advance width is not ink width (side bearings: here 0.135 cap-heights
+of bearing on the left) and cap height is not ink height (the round G
+overshoots, so the ink is 1.0375 cap-heights tall, not 1). Taking the cap height
+as 20 mm would have made the ink 20.75 mm tall — 0.75 mm outside the panel —
+and centring by the advance box would have left it 0.22 mm off centre. It refuses to proceed if the font did not resolve, which it detects
+by the aspect ratio staying at its seed.
+
+**A font that is not installed does not fall back.** SolveSpace looks the font
+up by *file basename* (`TtfFontList::LoadFont`) and, failing that, draws a big
+X at the text's corners. Verdana was the request; it is not installed here and
+a file naming it would show an X on every machine without it. The bundled
+Bitstream Vera Sans is compiled into the binary and always resolves — see D10.
+
+**Orientation.** Seen from the front, +x is to the right and +z up, and
+`u x v = x x z = -y` points *out* of the face. So the sketch plane sits 1 mm
+outside the face with u = +x, v = +z, and the extrude runs back **against** its
+normal — through the face and 3 mm into the wall. The far end of the cut is an
+exact distance, so the wall left behind is a dimension rather than a hope.
+This is the first of the orientation bugs in this repo that was right first
+time; a render confirmed the text reads left to right and upright rather than
+mirrored.
+
+**Jitter test.** Jittering only the text's own 8 params recovers the exact
+pocket volume at +-1, +-3 and +-8 mm. Jittering everything else at +-1 mm does
+change the volume, but that is the older rounded-corner arcs flipping (6.6),
+not the label — which the isolation shows, and which is why the +-0.3 mm row
+remains the meaningful one.
+
 ---
 
 ## 7. Structure of the model
@@ -521,6 +612,7 @@ by nothing at all, because both export the same triangles.
 | File | What it is |
 |---|---|
 | `cad/ugp100_params.py` | every dimension, with the base-design/scale derivation written down |
+| `cad/text_fit.py` | asks SolveSpace for a string's aspect ratio and ink box, so text can be fitted to a panel |
 | `cad/build_ugp100.py` | emits both `.slvs` |
 | `cad/check_ugp100.py` | the verification in section 5, including the degree-of-freedom check |
 | `../utilities/slvs_write.py` | a reusable `.slvs` writer (groups, requests, params, constraints), plus `dof_report()` |
@@ -541,13 +633,14 @@ geometry change behind it.
 
 ### 7.2 Build sequence
 
-**Bottom** (5 sketch + extrude pairs):
+**Bottom** (6 sketch + extrude pairs):
 
 1. exterior rounded rectangle, extruded up past everything — UNION
 2. cut away everything above the seam plane — DIFFERENCE
 3. the lip's footprint back as a *solid* block, same vertical extent — UNION
 4. cut away everything above the lip-top plane — DIFFERENCE
-5. the card cavity, from the floor datum upward — DIFFERENCE
+5. the engraved label — DIFFERENCE (D10)
+6. the card cavity, from the floor datum upward — DIFFERENCE
    (which is what turns step 3's block into a ring)
 
 Doing the cavity *after* the lip block is what keeps every sketch a single
@@ -602,6 +695,8 @@ In `cad/ugp100_params.py`:
 |---|---|
 | cavity size (fit a different sleeve/count) | `INT_HX`, `INT_HY`, `INT_H` via `H_TOTAL` |
 | lip/groove fit looser | `CLEAR_X`, `CLEAR_Y` (0.05 each is the sane single value) |
+| the label's text, size, depth | `TEXT`, `PANEL_W`/`PANEL_H`, `TEXT_DEPTH` (asserted against the wall) |
+| the label's font | `TEXT_FONT`; pick one present on every machine that will open the file |
 | easier to drop the top on | `MOUTH_CHAMFER` (0.6); it comes out of the seam land and the lip's full-width engagement, see D5 |
 | lip engagement | `LIP_H` (6.0) |
 | seam angle | the `30.0` inside `SEAM_TAN`, and `Z_SEAM` for its height |
@@ -623,6 +718,13 @@ the point of it.
   to open `CLEAR_X`/`CLEAR_Y` up after the first print; the 0.6 mm mouth
   bevel is there to make that first attempt go together at all.
 * The groove-roof fillet (D6) is the stress riser to watch.
+* **The label's print orientation is unstudied.** The bottom prints upright, so
+  each letter's top edge is a roof over a pocket 3 mm deep, supported at its
+  back and open at the front. That is a short cantilever rather than a bridge
+  and should print, but the round of the G is a shallow overhang worth a look
+  in the slicer preview.
+* **Confirm the label's face and layout** (D10): front = the low wide face, and
+  text filling the panel rather than a recessed panel with raised letters.
 * `-tight` in the source name implies a looser top exists. If it turns up,
   the only thing that should differ is `CLEAR_X`/`CLEAR_Y`.
 * No print orientation or support study has been done for either half.

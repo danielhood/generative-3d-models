@@ -42,10 +42,11 @@ from slvs_write import (Sketch, ENT_ORIGIN, UNION, DIFFERENCE,
                         POINTS_COINCIDENT, HORIZONTAL, VERTICAL,
                         PT_PT_DISTANCE, SYMMETRIC_HORIZ, SYMMETRIC_VERT,
                         EQUAL_RADIUS, DIAMETER, ARC_LINE_TANGENT,
-                        AT_MIDPOINT, ANGLE, TWO_SIDED,
+                        AT_MIDPOINT, ANGLE, TWO_SIDED, VERTICAL,
                         PT_IN_PLANE, PT_PLANE_DISTANCE,
                         ENT_XY_WORKPLANE, ENT_YZ_WORKPLANE, ENT_ZX_WORKPLANE)
 import ugp100_params as P
+import text_fit
 
 
 # --------------------------------------------------------------------------
@@ -299,10 +300,55 @@ def mouth_chamfer(S, pt_seam):
               combine=DIFFERENCE, subtype=TWO_SIDED, visible=True)
 
 
+def text_pocket(S):
+    """Engrave P.TEXT into the front face, P.TEXT_DEPTH deep.
+
+    The sketch plane is parallel to the face and P.TEXT_LEAD outside it, with
+    u = +x and v = +z -- which makes its normal u x v = -y, outward, so text
+    reads left to right the right way round seen from the front.  The cutter
+    is extruded back against that normal, through the face and TEXT_DEPTH into
+    the wall; its far end is an exact distance, so how much wall is left is a
+    dimension rather than a hope.
+
+    Sized by measurement: text_fit.measure() asks SolveSpace for the string's
+    aspect ratio and ink box (advance width is not ink width, and cap height is
+    not ink height -- round letters overshoot), and the cap height is chosen as
+    large as the PANEL_W x PANEL_H panel allows.  The ink box is then centred in
+    the panel rather than the text's own origin.
+    """
+    m = text_fit.measure(P.TEXT, P.TEXT_FONT)
+    ink_w, ink_h = m["x1"] - m["x0"], m["z1"] - m["z0"]
+    cap = min(P.PANEL_H / ink_h, P.PANEL_W / ink_w)
+    cap = int(cap * 100) / 100.0            # a clean number in the GUI, rounded down
+    # bottom-left of the text, relative to the panel centre, putting the INK
+    # box (not the advance box) on that centre
+    ou = -(m["x0"] + m["x1"]) / 2.0 * cap
+    ov = -(m["z0"] + m["z1"]) / 2.0 * cap
+
+    y_plane = -(P.EXT_HY + P.TEXT_LEAD)
+    (pt_text,) = datums(S, [(0.0, y_plane, P.PANEL_ZC)])
+    g, wp = S.workplane_group("text-plane", pt_text, (1.0, 0.0, 0.0),
+                              (0.0, 0.0, 1.0), visible=False)
+    _, tl, bl = S.text(g, wp, P.TEXT, P.TEXT_FONT, (ou, ov), cap, m["aspect"])
+    # the two free points: bottom-left is pinned in x and z against the
+    # reference planes; the top-left is held directly above it at cap height
+    S.constraint(PT_PLANE_DISTANCE, g, valA=ou, ptA=bl, entityA=ENT_YZ_WORKPLANE)
+    S.constraint(PT_PLANE_DISTANCE, g, valA=P.PANEL_ZC + ov, ptA=bl,
+                 entityA=ENT_XY_WORKPLANE)
+    S.constraint(VERTICAL, g, wp, ptA=tl, ptB=bl)
+    S.constraint(PT_PT_DISTANCE, g, wp, valA=cap, ptA=tl, ptB=bl,
+                 disp=(-4.0, 0.0, 0.0))
+    S.extrude("text-pocket", g, (0.0, (P.TEXT_LEAD + P.TEXT_DEPTH) / 2.0, 0.0),
+              combine=DIFFERENCE, visible=False)
+    return {"cap": cap, "ink_w": ink_w * cap, "ink_h": ink_h * cap}
+
+
 # --------------------------------------------------------------------------
 # the bottom part
 # --------------------------------------------------------------------------
-def build_bottom():
+def build_bottom(label=True):
+    """label=False builds the plain part, which the verification uses as the
+    baseline for what the engraving removed."""
     S = Sketch()
     pt_floor, pt_seam, pt_lip = datums(S, [(0.0, 0.0, P.FLOOR_T),
                                            (0.0, 0.0, P.Z_SEAM),
@@ -331,7 +377,12 @@ def build_bottom():
     # 4. trim the lip to height
     seam_cover(S, "lip-top-cut", pt_lip, P.Z_LIP, 0.0, tall, up=True)
 
-    # 5. and the card cavity last -- the dimension that has to be right, and
+    # 5. the engraved label, before the cavity so that the cavity -- the one
+    #    that has to be right -- is cut last and is what the file opens on
+    if label:
+        text_pocket(S)
+
+    # 6. and the card cavity last -- the dimension that has to be right, and
     #    what turns step 3's block into a ring.  It goes last because the group
     #    the file opens on is the one whose geometry you see, and the cavity
     #    profile is the size of the part rather than the size of a cutter.

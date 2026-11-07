@@ -78,6 +78,37 @@ MOUTH_CHAMFER = 0.6
 # face is ever coincident with a face of the part
 CHAMFER_OVER = 1.0
 
+# ---- engraved label on the bottom's front face ------------------------------
+# Text is cut INTO the exterior face of the front (-y) wall, inside a centred
+# PANEL_W x PANEL_H panel, TEXT_DEPTH deep.  "Front" is the low, wide face --
+# the one the seam is lowest at -- which is 78.2 x 27.25 mm, so a 70 x 20 panel
+# sits in it at the same proportions with a 3.6 mm margin above and below.
+# (The opposite wide face is 74.5 mm tall at the top of its wall.)
+#
+# The text is scaled to be as large as fits the panel: for "MTG" the HEIGHT is
+# what binds, not the width (ink 2.84 x 1.04 cap-heights against a 3.5 : 1
+# panel), so it fills the 20 mm and sits 54.7 mm wide inside the 70.  A longer
+# string would flip that and be width-limited, and the fit below handles both.
+TEXT = "MTG"
+# SolveSpace's own bundled Bitstream Vera Sans: guaranteed to resolve on any
+# install, where a system font that is missing draws a big X, and a close
+# Verdana relative (wide, open, large x-height).  Verdana itself is not
+# installable here and is not redistributable.
+TEXT_FONT = "BitstreamVeraSans-Roman-builtin.ttf"
+PANEL_W = 70.0
+PANEL_H = 20.0
+TEXT_DEPTH = 3.0
+# the wall is WALL_Y thick; the pocket must leave enough that it still prints as
+# a solid wall.  1.2 mm is three 0.4 mm perimeters.
+MIN_WALL_BEHIND_TEXT = 1.2
+assert WALL_Y - TEXT_DEPTH >= MIN_WALL_BEHIND_TEXT, \
+    "text pocket leaves only %.2f mm of wall" % (WALL_Y - TEXT_DEPTH)
+# the panel is centred on the front face, whose height is the seam's height at
+# the front edge
+Z_FRONT_TOP = Z_SEAM - EXT_HY * SEAM_TAN
+PANEL_ZC = Z_FRONT_TOP / 2.0
+TEXT_LEAD = 1.0             # the cutter starts this far outside the face
+
 # ---- cosmetic rounding -----------------------------------------------------
 # The original's exterior corner is an ELLIPSE (r2.0 scaled: 2.0588 x 2.3906)
 # and its horizontal perimeter edges carry a 2.0 round.  SolveSpace has no 3D

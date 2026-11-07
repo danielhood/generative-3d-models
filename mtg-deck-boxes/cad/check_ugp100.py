@@ -122,13 +122,14 @@ def overlap(sa, sb):
 
 
 # ---------------------------------------------------------------- face planes
-def planes(tris, ref, tol=1e-5, min_area=5.0):
+def planes(tris, ref, tol=1e-5, min_area=5.0, min_tri=0.0):
     rm = math.sqrt(sum(c * c for c in ref))
     refn = [c / rm for c in ref]
     acc = {}
     for t in tris:
         n, a = tri_na(t)
-        if n is None or sum(n[i] * refn[i] for i in range(3)) < 1 - tol:
+        if (n is None or a < min_tri or
+                sum(n[i] * refn[i] for i in range(3)) < 1 - tol):
             continue
         d = sum(refn[i] * t[0][i] for i in range(3))
         e = acc.setdefault(round(d, 2), [0.0, 0.0])
@@ -142,6 +143,94 @@ NORMALS = [("-x", (-1, 0, 0)), ("+x", (1, 0, 0)),
            ("-z", (0, 0, -1)), ("+z", (0, 0, 1)),
            ("seam-up", (0.0, -P.SEAM_SIN, P.SEAM_COS)),
            ("seam-down", (0.0, P.SEAM_SIN, -P.SEAM_COS))]
+
+
+def check_engraving(tris):
+    """The label is a pocket cut into the front wall.  What has to be true:
+    it is as deep as asked, it does not get near the cavity, it sits inside the
+    panel and clear of the face's edges, and it is centred."""
+    floor_y = -P.EXT_HY + P.TEXT_DEPTH
+    area, vol_expect = 0.0, 0.0
+    xs, zs, ys_seen = [], [], set()
+    for t in tris:
+        n, a = tri_na(t)
+        # the pocket floor faces OUT of the part (-y), at the engraving depth
+        if n is None or n[1] > -1 + 1e-6 or abs(t[0][1] - floor_y) > 1e-4:
+            continue
+        area += a
+        ys_seen.add(round(t[0][1], 4))
+        xs += [v[0] for v in t]
+        zs += [v[2] for v in t]
+    if not xs:
+        fail("no engraving pocket floor found at y=%.4f" % floor_y)
+        return
+    print("  pocket floor at y = %s   (asked: %.4f, i.e. %.2f deep)"
+          % (sorted(ys_seen), floor_y, P.TEXT_DEPTH))
+    if len(ys_seen) != 1:
+        fail("the pocket floor is not one plane")
+
+    # wall left between the pocket floor and the card cavity
+    wall = -P.INT_HY - floor_y
+    print("  wall left behind the text: %.4f mm   (need >= %.2f; the wall is "
+          "%.4f thick)" % (wall, P.MIN_WALL_BEHIND_TEXT, P.WALL_Y))
+    if wall < P.MIN_WALL_BEHIND_TEXT - 1e-6:
+        fail("only %.3f mm of wall behind the text" % wall)
+
+    x0, x1, z0, z1 = min(xs), max(xs), min(zs), max(zs)
+    print("  ink box   x [%8.3f, %8.3f] = %6.3f wide    z [%7.3f, %7.3f] = %6.3f tall"
+          % (x0, x1, x1 - x0, z0, z1, z1 - z0))
+    print("  panel     %.1f x %.1f, centred on x = 0, z = %.4f"
+          % (P.PANEL_W, P.PANEL_H, P.PANEL_ZC))
+    cx, cz = (x0 + x1) / 2.0, (z0 + z1) / 2.0
+    if x1 - x0 > P.PANEL_W + 1e-6 or z1 - z0 > P.PANEL_H + 1e-6:
+        fail("the text overflows its %.0f x %.0f panel" % (P.PANEL_W, P.PANEL_H))
+    if abs(cx) > 0.01 or abs(cz - P.PANEL_ZC) > 0.01:
+        fail("the text is %.3f, %.3f off the panel centre" % (cx, cz - P.PANEL_ZC))
+    print("  ink centre offset from panel centre: dx %+.4f  dz %+.4f" %
+          (cx, cz - P.PANEL_ZC))
+
+    # clear of the face's own edges: the flat of the front face runs to the
+    # corner tangent in x, and from the floor to the seam in z
+    flat_x = P.EXT_HX - P.EXT_CORNER_R
+    print("  margin to the face's edges: sides %.2f / %.2f mm, bottom %.2f mm, "
+          "top %.2f mm" % (flat_x + x0, flat_x - x1, z0, P.Z_FRONT_TOP - z1))
+    if min(flat_x + x0, flat_x - x1, z0, P.Z_FRONT_TOP - z1) < 1.0:
+        fail("the text is within 1 mm of the edge of the front face")
+
+    # What the engraving removed must be exactly floor area x depth.  If it is
+    # more, the cutter reached something else; if less, it did not go the
+    # depth that was asked.  The baseline is the same part built without it.
+    plain = _export_plain_bottom()
+    removed = _volume(plain) - _volume(tris)
+    expect = area * P.TEXT_DEPTH
+    print("  volume removed by the label %.2f mm^3   floor area x depth %.2f   "
+          "(difference %+.3f, %.3f%%)" % (removed, expect, removed - expect,
+                                          100.0 * (removed - expect) / expect))
+    if abs(removed - expect) > 0.005 * expect:
+        fail("the label removed %.1f mm^3, not the %.1f its floor implies"
+             % (removed, expect))
+    return area
+
+
+def _export_plain_bottom():
+    src = os.path.join(PART, ".check_plain.slvs")
+    out = os.path.join(PART, ".check_plain.stl")
+    builder.build_bottom(label=False).write(src)
+    subprocess.run(["solvespace-cli", "export-mesh", "--chord-tol", "0.02",
+                    "--output", out, src], capture_output=True)
+    tris = load_stl(out)
+    os.remove(src)
+    os.remove(out)
+    return tris
+
+
+def _volume(tris):
+    v = 0.0
+    for a, b, c in tris:
+        v += (a[0] * (b[1] * c[2] - b[2] * c[1]) -
+              a[1] * (b[0] * c[2] - b[2] * c[0]) +
+              a[2] * (b[0] * c[1] - b[1] * c[0])) / 6.0
+    return v
 
 
 def main():
@@ -193,7 +282,10 @@ def main():
     # interior x/y from the bottom's cavity faces, z from floor to ceiling
     bx = planes(rebuilt["bottom"], (1, 0, 0))
     by = planes(rebuilt["bottom"], (0, 1, 0))
-    floor = planes(rebuilt["bottom"], (0, 0, 1))[0][0]
+    # large triangles only: the engraving adds small upward-facing facets that
+    # land within a bin-width of the floor and would otherwise blur it
+    floor = max(planes(rebuilt["bottom"], (0, 0, 1), min_tri=20.0),
+                key=lambda p: p[1])[0]
     ceil = -planes(rebuilt["top"], (0, 0, -1))[0][0]
     got = [bx[0][0] * -2, by[0][0] * -2, ceil - floor]
     got[0] = -2 * bx[0][0]
@@ -204,6 +296,12 @@ def main():
               "delta vs intent %+9.5f" % (name, intent, model, g, d))
         if abs(d) > 0.002:
             fail("%s is %.4f off the design intent" % (name, d))
+
+    print()
+    print("=" * 72)
+    print("2b. engraved label on the bottom's front face")
+    print("=" * 72)
+    check_engraving(rebuilt["bottom"])
 
     print()
     print("=" * 72)

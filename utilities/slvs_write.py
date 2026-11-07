@@ -27,7 +27,7 @@ ONE_SIDED, TWO_SIDED = 7000, 7001
 UNION, DIFFERENCE, ASSEMBLE, INTERSECTION = 0, 1, 2, 3
 # Request.type
 REQ_WORKPLANE, REQ_DATUM_POINT, REQ_LINE_SEGMENT = 100, 101, 200
-REQ_CIRCLE, REQ_ARC = 400, 500
+REQ_CIRCLE, REQ_ARC, REQ_TTF_TEXT = 400, 500, 600
 # Constraint.type
 PT_PT_DISTANCE, PT_PLANE_DISTANCE = 30, 31
 POINTS_COINCIDENT = 20
@@ -101,6 +101,7 @@ class Sketch:
         self.group_names = {}      # group handle -> name
         self._extrude_groups = []  # handles, for dof_report
         self._wp = {}              # workplane entity -> frame, for dof_report
+        self._text = {}            # text entity -> aspect + its 4 points
         self._emit_references()
 
     # ---------- low level record emission ----------
@@ -213,7 +214,7 @@ class Sketch:
         return g
 
     # ---------- requests ----------
-    def _request(self, rtype, group, workplane, pts, construction=False):
+    def _request(self, rtype, group, workplane, pts, construction=False, extra=()):
         r = self.next_request; self.next_request += 1
         self._rec("AddRequest", [
             ("Request.h.v", self.x(r)),
@@ -221,7 +222,7 @@ class Sketch:
             ("Request.workplane.v", self.x(workplane) if workplane else None),
             ("Request.group.v", self.x(group)),
             ("Request.construction", 1 if construction else 0),
-        ])
+        ] + list(extra))
         for i, p in enumerate(pts):
             ph = []
             for k, val in enumerate(p):
@@ -250,6 +251,38 @@ class Sketch:
         r = self._request(REQ_ARC, group, workplane, [center, start, end], construction)
         self._arc[(r << 16) | 0] = ((r << 16) | 1, (r << 16) | 2, (r << 16) | 3)
         return (r << 16) | 0, (r << 16) | 1, (r << 16) | 2, (r << 16) | 3
+
+    def text(self, group, workplane, string, font, bot_left, height, aspect,
+             kerning=False):
+        """A TrueType text request.  -> (entity, top-left pt, bottom-left pt).
+
+        SolveSpace defines text by two free points: point[0] is the TOP-left and
+        point[1] the BOTTOM-left of the first glyph, so their separation is the
+        font's cap height (everything is scaled by 1/capHeight, see
+        TtfFont::PlotString).  The text runs along (v x normal), i.e. along +u
+        when v is up, and is `aspect` cap-heights long.  Points 2 and 3 (the
+        bottom-right and top-right of the box) are not free: SolveSpace
+        generates four equations pinning them to the first two (see
+        EntityBase::GenerateEquations), so they are seeded here and cost no
+        degrees of freedom.
+
+        `aspect` must be the font's true advance-width/cap-height ratio for
+        this string -- text_fit.measure() gets it from SolveSpace itself --
+        because a wrong seed leaves points 2/3 off their equations.
+        """
+        ox, oy = bot_left
+        tl = (ox, oy + height)
+        br = (ox + height * aspect, oy)
+        tr = (ox + height * aspect, oy + height)
+        r = self._request(REQ_TTF_TEXT, group, workplane, [tl, bot_left, br, tr],
+                          extra=[("Request.str", string),
+                                 ("Request.font", font),
+                                 ("Request.aspectRatio", self.f(aspect)),
+                                 ("Request.extraPoints", 1 if kerning else None)])
+        ent = (r << 16) | 0
+        pts = [(r << 16) | i for i in (1, 2, 3, 4)]
+        self._text[ent] = {"aspect": aspect, "pts": pts}
+        return ent, pts[0], pts[1]
 
     # ---------- constraints ----------
     def constraint(self, ctype, group, workplane=None, valA=None, ptA=None, ptB=None,
@@ -424,6 +457,21 @@ class _Eval:
             pc, ps, pe = self.uv(c, x), self.uv(s, x), self.uv(e, x)
             out.append(_math.hypot(ps[0] - pc[0], ps[1] - pc[1]) -
                        _math.hypot(pe[0] - pc[0], pe[1] - pc[1]))
+        # text carries four equations of its own: its bottom-right and
+        # top-right corners are functions of the two free points and the
+        # aspect ratio (EntityBase::GenerateEquations / RectGetPointsExprs).
+        # The perpendicular to the height vector, scaled by the aspect ratio,
+        # is the baseline.
+        for ent, d in sk._text.items():
+            tl, bl, br, tr = d["pts"]
+            if sk._pt[tl]["group"] != g:
+                continue
+            a, o = self.uv(tl, x), self.uv(bl, x)
+            eu = (a[0] - o[0], a[1] - o[1])
+            ev = (eu[1] * d["aspect"], -eu[0] * d["aspect"])
+            b, cc = self.uv(br, x), self.uv(tr, x)
+            out += [b[0] - (o[0] + ev[0]), b[1] - (o[1] + ev[1]),
+                    cc[0] - (o[0] + eu[0] + ev[0]), cc[1] - (o[1] + eu[1] + ev[1])]
         for c in sk._cons:
             if c["group"] != g:
                 continue
@@ -432,10 +480,17 @@ class _Eval:
                 a, b = self.uv(c["ptA"], x), self.uv(c["ptB"], x)
                 out += [a[0] - b[0], a[1] - b[1]]
             elif t == HORIZONTAL:
-                a, b = sk._line[c["entityA"]]
+                if c["entityA"]:
+                    a, b = sk._line[c["entityA"]]
+                else:
+                    a, b = c["ptA"], c["ptB"]
                 out.append(self.uv(a, x)[1] - self.uv(b, x)[1])
             elif t == VERTICAL:
-                a, b = sk._line[c["entityA"]]
+                # VERTICAL takes either a line, or two points
+                if c["entityA"]:
+                    a, b = sk._line[c["entityA"]]
+                else:
+                    a, b = c["ptA"], c["ptB"]
                 out.append(self.uv(a, x)[0] - self.uv(b, x)[0])
             elif t == PT_PT_DISTANCE:
                 a, b = self.uv(c["ptA"], x), self.uv(c["ptB"], x)
