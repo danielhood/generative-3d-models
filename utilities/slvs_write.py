@@ -100,6 +100,7 @@ class Sketch:
         self._cons = []            # dicts, in emission order
         self.group_names = {}      # group handle -> name
         self._extrude_groups = []  # handles, for dof_report
+        self._wp = {}              # workplane entity -> frame, for dof_report
         self._emit_references()
 
     # ---------- low level record emission ----------
@@ -177,7 +178,9 @@ class Sketch:
             ("Group.scale", self.f(1.0)),
             ("Group.remap", "{\n}"),
         ])
-        return g, 0x80000000 | (g << 16) | 0
+        wp = 0x80000000 | (g << 16) | 0
+        self._wp[wp] = {"origin": origin_entity, "u": u, "v": v}
+        return g, wp
 
     @staticmethod
     def workplane_origin(g):
@@ -388,10 +391,18 @@ class _Eval:
         return tuple(self.val(h, x) for h in d["params"][:2])
 
     def xyz(self, ent, x):
+        """A point's 3D position.  A sketch point only has (u, v), so it has to
+        be lifted through its workplane's frame -- which is what lets a plane
+        constraint (PT_PLANE_DISTANCE) pin a point drawn in a 2D sketch."""
         d = self.sk._pt.get(ent)
         if d is None:
             return (0.0, 0.0, 0.0)
-        return tuple(self.val(h, x) for h in d["params"][:3])
+        if len(d["params"]) >= 3:
+            return tuple(self.val(h, x) for h in d["params"][:3])
+        wp = self.sk._wp[d["wp"]]
+        o = self.xyz(wp["origin"], x)
+        u, v = (self.val(h, x) for h in d["params"][:2])
+        return tuple(o[i] + u * wp["u"][i] + v * wp["v"][i] for i in range(3))
 
     def val(self, h, x):
         i = self.index.get(h)

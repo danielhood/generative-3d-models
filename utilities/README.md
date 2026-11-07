@@ -156,6 +156,13 @@ equation, so it is not the one-equation constraint it looks like.
 `AddEntity` records can be omitted entirely and `Group.remap` can be `{}` --
 SolveSpace rebuilds both on load.
 
+And one that will waste your time in git rather than in CAD:
+`solvespace-cli export-mesh` is **nondeterministic**. Three runs over an
+unchanged `.slvs` at the same chord tolerance produced three different STLs,
+with differing triangle counts, all geometrically identical (same volume to
+0.001 mm^3, same bbox, watertight). The `.slvs` is reproducible; the mesh
+exported from it is not.
+
 **And check the orientation in the same breath** —
 `pattern_trace.orientation_iou()`. It is a separate failure and a sneakier
 one, because no derived quantity detects it: area, radii, component counts

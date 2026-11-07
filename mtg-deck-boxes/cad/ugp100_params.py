@@ -66,6 +66,18 @@ CLEAR_Y = 0.078127
 GROOVE_HX = LIP_HX + CLEAR_X        # 36.864280
 GROOVE_HY = LIP_HY + CLEAR_Y        # 40.479267
 
+# ---- lead-in bevel at the groove mouth -------------------------------------
+# A 45 deg chamfer where the groove's walls meet the top's seam face, so the
+# lip is funnelled in instead of having to be lined up before it will enter.
+# The original carries 0.4 x 0.4 here; 0.6 trades a little more of the seam
+# land (2.25 / 2.55 mm wide) and of the lip's full-width engagement (6.0 mm)
+# for more capture.  Both legs are equal, measured from the corner along the
+# wall and along the seam face.
+MOUTH_CHAMFER = 0.6
+# how far each cutter is pushed past the corner into open space, so no cutter
+# face is ever coincident with a face of the part
+CHAMFER_OVER = 1.0
+
 # ---- cosmetic rounding -----------------------------------------------------
 # The original's exterior corner is an ELLIPSE (r2.0 scaled: 2.0588 x 2.3906)
 # and its horizontal perimeter edges carry a 2.0 round.  SolveSpace has no 3D

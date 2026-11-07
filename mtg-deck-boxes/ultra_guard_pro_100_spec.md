@@ -5,8 +5,8 @@ Parts: `cad/build_ugp100.py` -> `ultra_guard_pro_100_bottom.slvs`,
 Source: `orig/Ultra_Guard_Pro_100+_bottom-BLANK.stl`,
 `orig/Ultra_Guard_Pro_100+_top-tight.stl`
 Verification: `cad/check_ugp100.py`
-Revision: rev A, 2026-11-07. First part in this repo built in SolveSpace
-rather than OpenSCAD.
+Revision: rev B, 2026-11-07. First part in this repo built in SolveSpace
+rather than OpenSCAD. rev B adds the lead-in bevel at the groove mouth (D5).
 Status: **modelled and mesh-verified against the source STLs; not yet
 printed.**
 
@@ -174,14 +174,32 @@ where the original's semi-axis is 2.3906; 0.14 mm at the x-aligned end).
 Aesthetic only (R4). The lip's outer corners likewise go from 0.5147 x
 0.5976 to r0.55.
 
-**D5 — 0.5 edge fillets dropped.** The original fillets the seam's outer
-edge, the lip's top edges and the groove's mouth with r0.5, and chamfers the
-groove mouth 0.4 x 0.4. All are omitted. None is a fit surface — verified:
-the original's groove roof meets its groove wall at a **sharp** corner, so
-the rebuild's sharp lip-top corner has somewhere to go. The one thing lost
-is assembly feel: the 0.4 chamfer at the groove mouth is a lead-in, and
-without it the halves need to be squarer to each other going together. Easy
-to add later as a sketch chamfer on the groove profile.
+**D5 — 0.5 edge fillets dropped, but the groove mouth is bevelled.** The
+original fillets the seam's outer edge and the lip's top edges with r0.5;
+those are omitted, and none of them is a fit surface — verified: the
+original's groove roof meets its groove wall at a **sharp** corner, so the
+rebuild's sharp lip-top corner has somewhere to go.
+
+The original also chamfers the groove's mouth 0.4 x 0.4, and that one is not
+cosmetic: it is the lead-in that lets the top be dropped on roughly square
+rather than lined up first. rev A omitted it and the halves had to be
+presented to each other accurately. rev B puts it back at **0.6 x 0.6**
+(`MOUTH_CHAMFER`), a little more generous than the original because printed
+parts of this size do not land within a tenth. The cost is paid twice over
+and both are affordable:
+
+| | before | after |
+|---|---|---|
+| seam land, x | 2.253 mm | 1.653 |
+| seam land, y | 2.551 mm | 2.011 |
+| lip engagement at full width | 6.0 mm | 5.4 |
+
+The bevel is on the top's groove rather than on the lip, which is where the
+original puts it: it is the side that funnels, and it leaves the bottom's
+lip — the more fragile of the two — at full section. Measured off the
+exported mesh, the chamfer is 0.600 along the wall and 0.600 along the seam
+face on all four sides, and the groove roof the lip bottoms against is
+untouched (681.95 mm^2, exactly the un-chamfered prediction).
 
 **D6 — The top's groove-roof-to-wall fillet dropped.** The original blends
 its groove roof up to the interior wall with roughly r2.2. The rebuild has a
@@ -198,6 +216,25 @@ groove is cut by a profile drawn on an x-normal plane with the slant as a
 *line*, extruded along that plane's own normal — not by a profile on the
 slanted plane pushed vertically, which is the obvious move and does not
 work.
+
+**D9 — The mouth bevel is two cutters, not one.** A chamfer is a prism of
+constant triangular section swept along the edge it cuts, so it has to be
+sketched in the plane *perpendicular to that edge* — and the groove's four
+mouth edges do not share a direction. The two at y = +-GROOVE_HY run
+straight along x; the two at x = +-GROOVE_HX follow the seam's slope. So:
+
+| edge pair | sketch plane | extruded along |
+|---|---|---|
+| y walls | x = 0 (u reads as y, v as z - Z_SEAM) | x |
+| x walls | normal (0, cos, sin) (u reads as x, v as depth below the seam) | that normal |
+
+Each plane is extruded along its own normal, so neither is the skewed
+extrude that D8/6.1 rules out, and each sketch holds both of its triangles
+as two separate loops. Each cutter overshoots the corner by `MOUTH_CHAMFER`
+in the other axis so the two bevels mitre instead of meeting at exactly
+coincident faces, and each triangle is drawn `CHAMFER_OVER` back along both
+legs — which leaves the hypotenuse on the same line while lifting the legs
+off the groove wall and the seam face, for the same reason.
 
 ---
 
@@ -240,10 +277,13 @@ Every group in both files: **0 degrees of freedom, 0 redundant equations**,
 residual at machine precision. Checked by `dof_report()` rather than by
 SolveSpace, for the reason in 6.7.
 
-| | groups | largest group |
+| | sketch groups | largest group |
 |---|---|---|
 | bottom | 6 | `outer-profile`, 40 unknowns / 40 equations / rank 40 |
-| top | 5 | `outer-profile`, 40 / 40 / rank 40 |
+| top | 7 | `outer-profile`, 40 / 40 / rank 40 |
+
+The extrude groups carry 3 unconstrained params each (their extrusion
+vector) and the report lists them as such; see 7.3.
 
 ### Mesh health (R8)
 
@@ -252,10 +292,10 @@ SolveSpace, for the reason in 6.7.
 | bottom, original | 14 350 | 1 | yes | 90 637.6 mm^3 |
 | bottom, rebuild | 260 | 1 | yes | 91 019.7 mm^3 (+0.42%) |
 | top, original | 12 832 | 1 | yes | 91 094.8 mm^3 |
-| top, rebuild | 188 | 1 | yes | 91 937.7 mm^3 (+0.93%) |
+| top, rebuild | 284 | 1 | yes | 91 876.9 mm^3 (+0.86%) |
 
 The rebuilds are slightly heavier because every omitted feature (D3, D5, D6)
-*removes* material in the original. 55x and 68x fewer triangles.
+*removes* material in the original. 55x and 45x fewer triangles.
 
 ### Assembly
 
@@ -490,6 +530,15 @@ and not the `.slvs` is the source of truth for the dimensions. Editing a
 `.slvs` in the SolveSpace GUI is fine and expected — just know that
 re-running the build overwrites it.
 
+**The `.stl` exports are not reproducible, and that is not a bug in the
+model.** `solvespace-cli export-mesh` is nondeterministic: three runs over
+an unchanged `.slvs` at the same chord tolerance gave three different files,
+two of them with a different triangle count (258 vs 260). Volume agrees to
+0.001 mm^3, the bounding box is identical and both are watertight single
+shells — it is only the choice of how to split the flat faces. So the STLs
+churn in git whenever they are regenerated; do not go looking for a
+geometry change behind it.
+
 ### 7.2 Build sequence
 
 **Bottom** (5 sketch + extrude pairs):
@@ -511,6 +560,8 @@ closed loop; the alternative is a two-loop ring sketch.
 2. open the bottom along the seam plane — DIFFERENCE
 3. the card cavity, from the ceiling datum down and out — DIFFERENCE
 4. the groove, via the x-normal trapezoid of 6.1 — DIFFERENCE
+5. the lead-in bevel round the groove's mouth, as the two cutters of D9 —
+   DIFFERENCE
 
 Both parts end on an operation whose sketch is about the size of the part,
 not the size of a cutter, because the group a file opens on is the one whose
@@ -551,6 +602,7 @@ In `cad/ugp100_params.py`:
 |---|---|
 | cavity size (fit a different sleeve/count) | `INT_HX`, `INT_HY`, `INT_H` via `H_TOTAL` |
 | lip/groove fit looser | `CLEAR_X`, `CLEAR_Y` (0.05 each is the sane single value) |
+| easier to drop the top on | `MOUTH_CHAMFER` (0.6); it comes out of the seam land and the lip's full-width engagement, see D5 |
 | lip engagement | `LIP_H` (6.0) |
 | seam angle | the `30.0` inside `SEAM_TAN`, and `Z_SEAM` for its height |
 | exterior corner look | `EXT_CORNER_R` |
@@ -568,10 +620,8 @@ the point of it.
 * **Not printed.** Everything here is mesh verification. The lip/groove
   clearance is 0.012-0.078 mm per side, which is below what FDM holds, so
   the real fit will be decided by print tolerance, not by this model. Expect
-  to open `CLEAR_X`/`CLEAR_Y` up after the first print.
-* The 0.4 mm groove-mouth chamfer (D5) is worth adding before printing if
-  assembly feels tight — it is a lead-in, and it is a two-line sketch change
-  rather than a 3D chamfer.
+  to open `CLEAR_X`/`CLEAR_Y` up after the first print; the 0.6 mm mouth
+  bevel is there to make that first attempt go together at all.
 * The groove-roof fillet (D6) is the stress riser to watch.
 * `-tight` in the source name implies a looser top exists. If it turns up,
   the only thing that should differ is `CLEAR_X`/`CLEAR_Y`.
