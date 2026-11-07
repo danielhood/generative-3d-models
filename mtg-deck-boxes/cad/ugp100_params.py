@@ -89,7 +89,7 @@ CHAMFER_OVER = 1.0
 # what binds, not the width (ink 2.84 x 1.04 cap-heights against a 3.5 : 1
 # panel), so it fills the 20 mm and sits 54.7 mm wide inside the 70.  A longer
 # string would flip that and be width-limited, and the fit below handles both.
-TEXT = "MTG"
+TEXT = "Spock"
 # SolveSpace's own bundled Bitstream Vera Sans: guaranteed to resolve on any
 # install, where a system font that is missing draws a big X, and a close
 # Verdana relative (wide, open, large x-height).  Verdana itself is not

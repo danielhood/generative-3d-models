@@ -168,7 +168,11 @@ extruded mesh, not by cap height or advance width: round glyphs overshoot the
 cap height (here 3.75%) and side bearings shift the centre. And **a font that
 is not installed does not fall back** -- it draws a big X -- so use the
 bundled `BitstreamVeraSans-Roman-builtin.ttf` unless every machine that opens
-the file has your font.
+the file has your font. **A character the font lacks does not fail either**:
+FreeType prints `CID-to-GID mapping ... failed` on stderr, SolveSpace uses the
+character code as a glyph index, and a mesh comes out containing some unrelated
+glyph (`A☃B` exports fine). That message is the only signal, so scrape it
+(`mtg-deck-boxes/cad/text_fit.py` does) and refuse.
 
 And one that will waste your time in git rather than in CAD:
 `solvespace-cli export-mesh` is **nondeterministic**. Three runs over an

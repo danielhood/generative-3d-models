@@ -21,6 +21,7 @@ import math
 import os
 import subprocess
 import sys
+import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PART = os.path.normpath(os.path.join(HERE, ".."))
@@ -163,7 +164,7 @@ def check_engraving(tris):
         zs += [v[2] for v in t]
     if not xs:
         fail("no engraving pocket floor found at y=%.4f" % floor_y)
-        return
+        return None
     print("  pocket floor at y = %s   (asked: %.4f, i.e. %.2f deep)"
           % (sorted(ys_seen), floor_y, P.TEXT_DEPTH))
     if len(ys_seen) != 1:
@@ -209,19 +210,10 @@ def check_engraving(tris):
     if abs(removed - expect) > 0.005 * expect:
         fail("the label removed %.1f mm^3, not the %.1f its floor implies"
              % (removed, expect))
-    return area
-
-
-def _export_plain_bottom():
-    src = os.path.join(PART, ".check_plain.slvs")
-    out = os.path.join(PART, ".check_plain.stl")
-    builder.build_bottom(label=False).write(src)
-    subprocess.run(["solvespace-cli", "export-mesh", "--chord-tol", "0.02",
-                    "--output", out, src], capture_output=True)
-    tris = load_stl(out)
-    os.remove(src)
-    os.remove(out)
-    return tris
+    return {"area": area, "removed": removed, "wall": wall,
+            "ink_w": x1 - x0, "ink_h": z1 - z0,
+            "margin_side": min(flat_x + x0, flat_x - x1),
+            "margin_bottom": z0, "margin_top": P.Z_FRONT_TOP - z1}
 
 
 def _volume(tris):
@@ -231,6 +223,16 @@ def _volume(tris):
               a[1] * (b[0] * c[2] - b[2] * c[0]) +
               a[2] * (b[0] * c[1] - b[1] * c[0])) / 6.0
     return v
+
+
+def _export_plain_bottom():
+    with tempfile.TemporaryDirectory() as tmp:
+        src = os.path.join(tmp, "plain.slvs")
+        out = os.path.join(tmp, "plain.stl")
+        builder.build_bottom(label=False).write(src)
+        subprocess.run(["solvespace-cli", "export-mesh", "--chord-tol", "0.02",
+                        "--output", out, src], capture_output=True)
+        return load_stl(out)
 
 
 def main():
@@ -255,22 +257,27 @@ def main():
     import mesh_check
     rebuilt = {}
     for part, src in SLVS.items():
-        out = os.path.join(HERE, "..", ".check_%s.stl" % part)
-        out = os.path.normpath(out)
-        if os.path.exists(out):
-            os.remove(out)
-        r = subprocess.run(["solvespace-cli", "export-mesh", "--chord-tol", "0.02",
-                            "--output", out, src], capture_output=True, text=True)
-        if not os.path.exists(out):
-            fail("%s: solvespace-cli produced no mesh" % part)
-            continue
-        if "self-intersecting" in (r.stdout + r.stderr):
-            fail("%s: solvespace reports a self-intersecting mesh" % part)
-        tris = load_stl(out)
-        rebuilt[part] = tris
-        print("  %-7s %d triangles" % (part, len(tris)))
-        res = mesh_check.check(out)
-        os.remove(out)
+        with tempfile.TemporaryDirectory() as tmp:
+            out = os.path.join(tmp, "%s.stl" % part)
+            r = subprocess.run(["solvespace-cli", "export-mesh", "--chord-tol",
+                                "0.02", "--output", out, src],
+                               capture_output=True, text=True)
+            if not os.path.exists(out):
+                fail("%s: solvespace-cli produced no mesh" % part)
+                continue
+            if "self-intersecting" in (r.stdout + r.stderr):
+                fail("%s: solvespace reports a self-intersecting mesh" % part)
+            rebuilt[part] = load_stl(out)
+            print("  %-7s %d triangles" % (part, len(rebuilt[part])))
+            res = mesh_check.check(out, verbose=False)
+        print("          watertight %s, winding %s, %d shell(s), volume %.1f mm^3"
+              % ("yes" if res["non_manifold_edges"] == 0 else
+                 "NO (%d bad edges)" % res["non_manifold_edges"],
+                 "consistent" if res["winding_consistent"] else "INCONSISTENT",
+                 res["shells"], res["volume"]))
+        if res["non_manifold_edges"] or not res["winding_consistent"] \
+                or res["shells"] != 1:
+            fail("%s mesh is not one watertight shell" % part)
 
     print()
     print("=" * 72)
