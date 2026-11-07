@@ -238,25 +238,26 @@ coincident faces, and each triangle is drawn `CHAMFER_OVER` back along both
 legs — which leaves the hypotenuse on the same line while lifting the legs
 off the groove wall and the seam face, for the same reason.
 
-**D10 — The label.** "MTG" is cut into the **front (-y) face** of the bottom,
+**D10 — The label.** A label is cut into the **front (-y) face** of the bottom,
 in Bitstream Vera Sans, 3.000 mm deep, fitted to a 70 x 20 mm panel centred on
-the face. Several of these were judgment calls on an ambiguous brief:
+the face. The current label is **"Spock"** (rev D); rev C's was "MTG". The
+procedure for changing it is `README.md`; this is why it is built the way it
+is. Several of these were judgment calls on an ambiguous brief, and were
+accepted when rev C was reviewed:
 
 * **"Front" is the low wide face.** The bottom has two wide faces: 78.2 x
   27.25 mm at -y (where the seam is lowest) and 78.2 x up to 74.5 mm at +y. A
   70 x 20 panel is in the proportions of the first (3.5 : 1 against 2.9 : 1)
   and would look lost on the second, so -y. It is `P.PANEL_ZC` and the sign of
   `y_plane` if the other face is meant.
-* **The text fills the panel; the panel itself is not cut.** I read "a 70 x
-  20 centred panel" as the area the text is fitted into, not as a recessed
-  rectangle with raised letters. For "MTG" the *height* binds, not the width:
-  the ink is 2.84 x 1.04 cap-heights against a 3.5 : 1 panel, so the cap height
-  is 19.27 mm, the ink 54.7 x 19.99 mm, and it sits centred in the 70 mm with
-  7.7 mm to spare each side. A longer string would flip to width-limited and
-  the fit handles that. If a recessed panel with raised letters is what was
-  meant, it is a different cut (panel minus text) and worth saying now.
-* **Cap height is rounded down to 0.01 mm**, so the dimension in the GUI is
-  19.27 rather than 19.2774...; the ink is 0.007 mm inside the 20 mm limit.
+* **The text fills the panel; the panel itself is not cut.** "A 70 x 20
+  centred panel" is the area the text is fitted into, not a recessed
+  rectangle with raised letters. Text is made as large as the panel allows and
+  is **fitted by its ink box**, never by cap height or advance width: round
+  letters overshoot the cap height, and descenders and ascenders extend well
+  past it. Which panel dimension binds depends on the string — see the table.
+* **Cap height is rounded down to 0.01 mm**, so the dimension in the GUI is a
+  clean number and the ink is never outside the panel.
 * **Depth leaves 1.78 mm of wall** (the wall is 4.78 mm). `ugp100_params.py`
   asserts at least 1.2 mm — three 0.4 mm perimeters — so a deeper cut or a
   thinner wall fails the build instead of printing a translucent wall.
@@ -269,11 +270,31 @@ the face. Several of these were judgment calls on an ambiguous brief:
   A different font is one parameter, `TEXT_FONT`, but it should be one that
   is on every machine that will open the file.
 
-Margins on the face: 9.58 mm to each side's corner tangent, 3.63 mm above
-and below. Measured off the exported mesh, the pocket floor is one plane at
-y = -40.0308 (3.0000 deep), the ink is centred on the panel to 0.0000 mm, and
-the volume removed is 1108.35 mm^3 against a floor area x depth of 1108.35 —
-so the cutter touched nothing but the label.
+What each label comes out as — the same machinery, very different results:
+
+| | "MTG" (rev C) | "Spock" (rev D) |
+|---|---|---|
+| ink, in cap heights | 2.84 x 1.04 | 4.03 x 1.33 |
+| binds on | height | height |
+| cap height | 19.27 mm | 15.06 mm |
+| ink on the face | 54.67 x 19.99 mm | 60.76 x 19.99 mm |
+| stroke | ~2.6 mm | ~2.0 mm |
+| margin to each side's corner tangent | 9.58 mm | 6.53 mm |
+| volume removed | 1108.35 mm^3 | 849.75 mm^3 |
+| triangles in the bottom's STL | 760 | 1984 |
+
+"Spock" is the instructive one. Its ink is 1.33 cap-heights tall rather than
+1.04 because the **p descends 0.29 cap-heights below the baseline** and the k
+rises 0.04 above the capitals, and the whole ink box has to fit 20 mm. So the
+capital S is 15 mm tall, not the 19 mm a descender-free label would get, and
+the 70 mm width is not the limit (87% used). That is not a defect — it is what
+fitting by ink means — but it is the thing most likely to surprise someone
+renaming.
+
+Measured off the exported mesh for either label: the pocket floor is one plane
+at y = -40.0308 (3.0000 deep), the ink is centred on the panel to 0.0000 mm,
+and the volume removed equals the floor area x depth, so the cutter touched
+nothing but the label.
 
 ---
 
@@ -603,6 +624,76 @@ change the volume, but that is the older rounded-corner arcs flipping (6.6),
 not the label — which the isolation shows, and which is why the +-0.3 mm row
 remains the meaningful one.
 
+### 6.9 Renaming the label: what a second string showed
+
+Changing "MTG" to "Spock" went through first time, but only because the first
+version fitted by ink box. It also exposed three things "MTG" could not, and
+because renaming is expected to be routine (R10) the answer was to build a
+procedure (`README.md`, `cad/relabel.py`) rather than leave it as "edit
+`TEXT` and see".
+
+**Descenders change the size of everything.** "MTG" has no descender and "Spock"
+has one, so the capitals went from 19.3 to 15.1 mm. A fit by cap height would
+have made the ink 26.55 mm tall — 6.55 mm over the panel, the p's descender
+alone being 5.7 mm — and centring by the advance box would have mis-centred
+it; neither was written, which is the whole benefit of
+`text_fit.fit()` measuring the ink. `relabel.py` says so in a note whenever it
+happens, because it is the one result a person would otherwise take for a bug.
+
+**o and p have counters, and that is fine.** "MTG" has no enclosed shapes, so
+this was untested until "Spock". A counter is a tower of un-cut material
+standing in the pocket, attached to the pocket floor, so the mesh stays one
+shell and the engraving check holds — it counts floor area, which is only the
+ring of the letter — and the volume removed still equals floor area x depth.
+Rendered: the `o`'s counter stands, the `p`'s stands.
+
+**A missing character is silent, so the tool makes it loud.** The case that
+could have gone unnoticed: a character the font lacks (`A☃B`, anything outside
+Latin-1) does *not* fail. FreeType prints "CID-to-GID mapping ... failed" on
+stderr, SolveSpace carries on using the character code as a glyph index, and a
+mesh comes out — containing whatever shape that glyph index happens to be.
+`A☃B` exports successfully. `text_fit.measure()` now reads that message and
+refuses, naming the character and its code point.
+
+**The tool changes nothing by default, and proves the build, not just the
+fit.** `relabel.py "text"` fits the string and then builds the bottom in a
+temporary folder with it, checking watertightness, shell count and the same
+engraving checks the full verification runs. That second part matters because
+the failure that measurement cannot predict is SolveSpace's NURBS boolean
+breaking on some particular set of outlines (6.1 was exactly that for a
+different cut). `--apply` is opt-in. It then rewrites the one `TEXT` line,
+rebuilds, exports the bottom's STL, runs the full verification, and confirms
+the top's `.slvs` is byte-identical to before — a relabel must not touch the
+top, and if it does something else has changed.
+
+What was tried, to establish what the guards are worth (all through the dry
+run, so no repo state involved):
+
+| label | result |
+|---|---|
+| Spock, Kirk, Wi | fits, one shell, passes |
+| Jean-Luc Picard | passes, **width-limited**: capitals shrink to 6.7 mm, stroke ~0.9 mm |
+| Q&A (2024), He said "hi", Beam me up, 0123456789 | pass; width-limited; stroke 1.1-1.2 mm |
+| AVAV, Ty To, fjfj, rnrn, WWW, MMMM, gjpqy, @#%&* | pass, one shell — touching and overlapping glyph pairs did not break the boolean |
+| A☃B, 日本 | **refused**: character not in the font |
+| empty, spaces only | **refused** |
+| 40 x "x" | **refused**: over the 32-character limit |
+
+Two limits are therefore soft rather than hard, and the tool warns instead of
+refusing: width-limited labels (still engraves, just smaller) and thin strokes
+(under 1.2 mm "printable but only just", under 0.8 mm — two nozzle widths —
+"will not print reliably"). 0.8 mm is a rule of thumb for a 0.4 mm nozzle, not
+a measured property of this printer.
+
+The stroke is measured, not remembered: a capital I in a sans face is a plain
+bar, so `text_fit.stem_width()` measures one and scales by the cap height.
+
+**Archive naming.** The repo has an `archive/` folder of STLs named
+`ultra_guard_pro_100_bottom-<label>.stl` (`-MTG`, `-BLANK`). `--archive`
+follows that and refuses to overwrite. It is opt-in, and it archives the *new*
+label; keeping the outgoing one is a manual step before relabelling, which is
+how `-MTG` got there.
+
 ---
 
 ## 7. Structure of the model
@@ -612,7 +703,9 @@ remains the meaningful one.
 | File | What it is |
 |---|---|
 | `cad/ugp100_params.py` | every dimension, with the base-design/scale derivation written down |
-| `cad/text_fit.py` | asks SolveSpace for a string's aspect ratio and ink box, so text can be fitted to a panel |
+| `cad/text_fit.py` | asks SolveSpace for a string's aspect ratio and ink box, fits text to the panel, and rejects strings that cannot be engraved |
+| `cad/relabel.py` | changes the label: fit report, trial build, then (with `--apply`) rewrite, rebuild, export and verify |
+| `README.md` | the runbook for changing the label |
 | `cad/build_ugp100.py` | emits both `.slvs` |
 | `cad/check_ugp100.py` | the verification in section 5, including the degree-of-freedom check |
 | `../utilities/slvs_write.py` | a reusable `.slvs` writer (groups, requests, params, constraints), plus `dof_report()` |
@@ -695,7 +788,8 @@ In `cad/ugp100_params.py`:
 |---|---|
 | cavity size (fit a different sleeve/count) | `INT_HX`, `INT_HY`, `INT_H` via `H_TOTAL` |
 | lip/groove fit looser | `CLEAR_X`, `CLEAR_Y` (0.05 each is the sane single value) |
-| the label's text, size, depth | `TEXT`, `PANEL_W`/`PANEL_H`, `TEXT_DEPTH` (asserted against the wall) |
+| the label's text | **`python3 cad/relabel.py "text" --apply`** — see `README.md`, do not hand-edit `TEXT` |
+| the label's panel or depth | `PANEL_W`/`PANEL_H`, `TEXT_DEPTH` (asserted against the wall), then rebuild and check |
 | the label's font | `TEXT_FONT`; pick one present on every machine that will open the file |
 | easier to drop the top on | `MOUTH_CHAMFER` (0.6); it comes out of the seam land and the lip's full-width engagement, see D5 |
 | lip engagement | `LIP_H` (6.0) |

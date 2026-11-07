@@ -300,8 +300,8 @@ def mouth_chamfer(S, pt_seam):
               combine=DIFFERENCE, subtype=TWO_SIDED, visible=True)
 
 
-def text_pocket(S):
-    """Engrave P.TEXT into the front face, P.TEXT_DEPTH deep.
+def text_pocket(S, text=None):
+    """Engrave `text` (default P.TEXT) into the front face, P.TEXT_DEPTH deep.
 
     The sketch plane is parallel to the face and P.TEXT_LEAD outside it, with
     u = +x and v = +z -- which makes its normal u x v = -y, outward, so text
@@ -316,20 +316,15 @@ def text_pocket(S):
     large as the PANEL_W x PANEL_H panel allows.  The ink box is then centred in
     the panel rather than the text's own origin.
     """
-    m = text_fit.measure(P.TEXT, P.TEXT_FONT)
-    ink_w, ink_h = m["x1"] - m["x0"], m["z1"] - m["z0"]
-    cap = min(P.PANEL_H / ink_h, P.PANEL_W / ink_w)
-    cap = int(cap * 100) / 100.0            # a clean number in the GUI, rounded down
-    # bottom-left of the text, relative to the panel centre, putting the INK
-    # box (not the advance box) on that centre
-    ou = -(m["x0"] + m["x1"]) / 2.0 * cap
-    ov = -(m["z0"] + m["z1"]) / 2.0 * cap
+    text = P.TEXT if text is None else text
+    f = text_fit.fit(text, P.TEXT_FONT, P.PANEL_W, P.PANEL_H)
+    cap, ou, ov = f["cap"], f["ou"], f["ov"]
 
     y_plane = -(P.EXT_HY + P.TEXT_LEAD)
     (pt_text,) = datums(S, [(0.0, y_plane, P.PANEL_ZC)])
     g, wp = S.workplane_group("text-plane", pt_text, (1.0, 0.0, 0.0),
                               (0.0, 0.0, 1.0), visible=False)
-    _, tl, bl = S.text(g, wp, P.TEXT, P.TEXT_FONT, (ou, ov), cap, m["aspect"])
+    _, tl, bl = S.text(g, wp, text, P.TEXT_FONT, (ou, ov), cap, f["aspect"])
     # the two free points: bottom-left is pinned in x and z against the
     # reference planes; the top-left is held directly above it at cap height
     S.constraint(PT_PLANE_DISTANCE, g, valA=ou, ptA=bl, entityA=ENT_YZ_WORKPLANE)
@@ -340,13 +335,13 @@ def text_pocket(S):
                  disp=(-4.0, 0.0, 0.0))
     S.extrude("text-pocket", g, (0.0, (P.TEXT_LEAD + P.TEXT_DEPTH) / 2.0, 0.0),
               combine=DIFFERENCE, visible=False)
-    return {"cap": cap, "ink_w": ink_w * cap, "ink_h": ink_h * cap}
+    return f
 
 
 # --------------------------------------------------------------------------
 # the bottom part
 # --------------------------------------------------------------------------
-def build_bottom(label=True):
+def build_bottom(label=True, text=None):
     """label=False builds the plain part, which the verification uses as the
     baseline for what the engraving removed."""
     S = Sketch()
@@ -380,7 +375,7 @@ def build_bottom(label=True):
     # 5. the engraved label, before the cavity so that the cavity -- the one
     #    that has to be right -- is cut last and is what the file opens on
     if label:
-        text_pocket(S)
+        text_pocket(S, text)
 
     # 6. and the card cavity last -- the dimension that has to be right, and
     #    what turns step 3's block into a ring.  It goes last because the group

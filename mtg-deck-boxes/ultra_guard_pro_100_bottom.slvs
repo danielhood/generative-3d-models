@@ -1562,15 +1562,15 @@ Request.type=600
 Request.workplane.v=800c0000
 Request.group.v=0000000c
 Request.construction=0
-Request.str=MTG
+Request.str=Spock
 Request.font=BitstreamVeraSans-Roman-builtin.ttf
-Request.aspectRatio=3.08439778520914398285
+Request.aspectRatio=4.12928293404966861857
 AddRequest
 
 Constraint.h.v=00000055
 Constraint.type=31
 Constraint.group.v=0000000c
-Constraint.valA=-29.93117147688865387067
+Constraint.valA=-31.74418937988280831064
 Constraint.ptA.v=00200002
 Constraint.entityA.v=00020000
 Constraint.other=0
@@ -1584,7 +1584,7 @@ AddConstraint
 Constraint.h.v=00000056
 Constraint.type=31
 Constraint.group.v=0000000c
-Constraint.valA=4.00498329706401356987
+Constraint.valA=7.92797146596521873363
 Constraint.ptA.v=00200002
 Constraint.entityA.v=00010000
 Constraint.other=0
@@ -1613,7 +1613,7 @@ Constraint.h.v=00000058
 Constraint.type=30
 Constraint.group.v=0000000c
 Constraint.workplane.v=800c0000
-Constraint.valA=19.26999999999999957367
+Constraint.valA=15.06000000000000049738
 Constraint.ptA.v=00200001
 Constraint.ptB.v=00200002
 Constraint.other=0
@@ -2383,35 +2383,35 @@ Param.val=13.62717515458673922524
 AddParam
 
 Param.h.v.=00200010
-Param.val=-29.93117147688865387067
+Param.val=-31.74418937988280831064
 AddParam
 
 Param.h.v.=00200011
-Param.val=9.64780814247727391830
+Param.val=9.36079631137847911759
 AddParam
 
 Param.h.v.=00200013
-Param.val=-29.93117147688865387067
+Param.val=-31.74418937988280831064
 AddParam
 
 Param.h.v.=00200014
-Param.val=-9.62219185752272565537
+Param.val=-5.69920368862152049161
 AddParam
 
 Param.h.v.=00200016
-Param.val=29.50517384409154786340
+Param.val=30.44281160690520593448
 AddParam
 
 Param.h.v.=00200017
-Param.val=-9.62219185752272565537
+Param.val=-5.69920368862152049161
 AddParam
 
 Param.h.v.=00200019
-Param.val=29.50517384409154786340
+Param.val=30.44281160690520593448
 AddParam
 
 Param.h.v.=0020001a
-Param.val=9.64780814247727391830
+Param.val=9.36079631137847911759
 AddParam
 
 Param.h.v.=800d0000
