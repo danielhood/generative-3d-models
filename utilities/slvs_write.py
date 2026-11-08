@@ -296,7 +296,7 @@ class Sketch:
         degrees of freedom.
 
         `aspect` must be the font's true advance-width/cap-height ratio for
-        this string -- text_fit.measure() gets it from SolveSpace itself --
+        this string -- slvs_text.measure() gets it from SolveSpace itself --
         because a wrong seed leaves points 2/3 off their equations.
         """
         ox, oy = bot_left

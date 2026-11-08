@@ -41,7 +41,7 @@ sys.path.insert(0, os.path.join(HERE, "..", "..", "utilities"))
 sys.path.insert(0, HERE)
 
 import mesh_check
-import text_fit
+import slvs_text
 import ugp100_params as P
 import build_ugp100 as builder
 import check_ugp100 as checker
@@ -68,8 +68,8 @@ def md5(path):
 
 def report(text):
     """Fit the string and print how it will be engraved.  Returns (fit, warnings)."""
-    f = text_fit.fit(text, P.TEXT_FONT, P.PANEL_W, P.PANEL_H)
-    stem = text_fit.stem_width(P.TEXT_FONT) * f["cap"]
+    f = slvs_text.fit(text, P.TEXT_FONT, P.PANEL_W, P.PANEL_H)
+    stem = slvs_text.stem_width(P.TEXT_FONT) * f["cap"]
     flat_x = P.EXT_HX - P.EXT_CORNER_R
     side = flat_x - f["ink_w"] / 2.0
     top = P.Z_FRONT_TOP - (P.PANEL_ZC + P.PANEL_H / 2.0)
@@ -178,7 +178,7 @@ def main():
     print("=" * 72)
     try:
         f, warn = report(text)
-    except text_fit.TextError as e:
+    except slvs_text.TextError as e:
         print("  CANNOT ENGRAVE: %s" % e)
         return 2
     for w in warn:
@@ -190,7 +190,7 @@ def main():
     print("=" * 72)
     try:
         problems, data, health = trial(text)
-    except text_fit.TextError as e:
+    except slvs_text.TextError as e:
         print("  CANNOT ENGRAVE: %s" % e)
         return 2
     if health:

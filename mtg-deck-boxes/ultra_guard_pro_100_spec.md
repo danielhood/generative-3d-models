@@ -662,7 +662,7 @@ looks plausible and is quietly 2 DOF short.
 **The aspect ratio is a stored, load-bearing number you cannot compute.** It is
 advance width over cap height and it is what the two derived points are pinned
 to, so a wrong seed leaves them off their equations. Computing it means
-reimplementing FreeType. `cad/text_fit.py` instead builds a throwaway sketch,
+reimplementing FreeType. `utilities/slvs_text.py` instead builds a throwaway sketch,
 lets `solvespace-cli regenerate` write back the value SolveSpace computed, and
 extrudes the text to read the **ink box** off the mesh. That second part
 matters: advance width is not ink width (side bearings: here 0.135 cap-heights
@@ -706,7 +706,7 @@ has one, so the capitals went from 19.3 to 15.1 mm. A fit by cap height would
 have made the ink 26.55 mm tall — 6.55 mm over the panel, the p's descender
 alone being 5.7 mm — and centring by the advance box would have mis-centred
 it; neither was written, which is the whole benefit of
-`text_fit.fit()` measuring the ink. `relabel.py` says so in a note whenever it
+`slvs_text.fit()` measuring the ink. `relabel.py` says so in a note whenever it
 happens, because it is the one result a person would otherwise take for a bug.
 
 **o and p have counters, and that is fine.** "MTG" has no enclosed shapes, so
@@ -721,7 +721,7 @@ could have gone unnoticed: a character the font lacks (`A☃B`, anything outside
 Latin-1) does *not* fail. FreeType prints "CID-to-GID mapping ... failed" on
 stderr, SolveSpace carries on using the character code as a glyph index, and a
 mesh comes out — containing whatever shape that glyph index happens to be.
-`A☃B` exports successfully. `text_fit.measure()` now reads that message and
+`A☃B` exports successfully. `slvs_text.measure()` now reads that message and
 refuses, naming the character and its code point.
 
 **The tool changes nothing by default, and proves the build, not just the
@@ -755,7 +755,7 @@ refusing: width-limited labels (still engraves, just smaller) and thin strokes
 a measured property of this printer.
 
 The stroke is measured, not remembered: a capital I in a sans face is a plain
-bar, so `text_fit.stem_width()` measures one and scales by the cap height.
+bar, so `slvs_text.stem_width()` measures one and scales by the cap height.
 
 **Archive naming.** The repo has an `archive/` folder of STLs named
 `ultra_guard_pro_100_bottom-<label>.stl` (`-MTG`, `-BLANK`). `--archive`
@@ -871,13 +871,22 @@ something while being written: the mouth-bevel difference corrected in D5.
 | File | What it is |
 |---|---|
 | `cad/ugp100_params.py` | every dimension, with the base-design/scale derivation written down |
-| `cad/text_fit.py` | asks SolveSpace for a string's aspect ratio and ink box, fits text to the panel, and rejects strings that cannot be engraved |
+| `../utilities/slvs_text.py` | asks SolveSpace for a string's aspect ratio and ink box, fits text to the panel, and rejects strings that cannot be engraved |
 | `cad/relabel.py` | changes the label: fit report, trial build, then (with `--apply`) rewrite, rebuild, export and verify |
 | `README.md` | the runbook for changing the label |
 | `cad/build_ugp100.py` | emits both `.slvs` |
 | `cad/check_ugp100.py` | the verification in section 5, including the degree-of-freedom check and the snap engagement |
 | `cad/audit_missing.py` | what the original has that the rebuild does not (6.10); `--prove` shows it can find a missing feature |
 | `../utilities/slvs_write.py` | a reusable `.slvs` writer (groups, requests, params, constraints), plus `dof_report()` |
+
+The part's scripts are thin: the machinery they use is shared, in
+`../utilities/` (see its README): `slvs_write` and `slvs_shapes` to build,
+`slvs_check` to verify a generated file, `slvs_info` to read one, and
+`mesh_geom` / `mesh_rays` / `mesh_planes` / `mesh_features` / `mesh_compare` for the
+measuring in `check_ugp100.py` and `audit_missing.py`. They were private
+helpers in these scripts until they were needed elsewhere; moving them changed
+nothing, which was verified: both `.slvs` still build byte for byte, and the check
+and audit give identical output.
 
 `build_ugp100.py` reproduces both `.slvs` byte for byte, so the generator
 and not the `.slvs` is the source of truth for the dimensions. Editing a

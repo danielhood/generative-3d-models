@@ -21,9 +21,6 @@ import subprocess
 import sys
 import tempfile
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.join(HERE, "..", "..", "utilities"))
-
 from slvs_write import Sketch, ENT_ORIGIN, UNION
 from stl_io import load_stl
 

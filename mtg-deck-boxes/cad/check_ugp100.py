@@ -17,7 +17,6 @@ by (+0.0038, -0.0016, -0.0271) mm.  That z term is not noise -- it means the
 original pair interferes by 0.027 mm at the seam.  The rebuild puts the two
 halves in one exact frame instead, so its seam faces just touch.
 """
-import math
 import os
 import subprocess
 import sys
@@ -29,6 +28,9 @@ sys.path.insert(0, os.path.join(HERE, "..", "..", "utilities"))
 sys.path.insert(0, HERE)
 
 from stl_io import load_stl
+from mesh_geom import shift, tri_normal_area as tri_na, volume as _volume, point_tri_distance as _tri_dist
+from mesh_planes import group_planes
+from mesh_rays import axis_spans, overlap
 from slvs_write import print_dof_report
 import ugp100_params as P
 import build_ugp100 as builder
@@ -50,93 +52,12 @@ def fail(msg):
     print("  FAIL  " + msg)
 
 
-def shift(tris, d):
-    return [tuple(tuple(v[i] + d[i] for i in range(3)) for v in t) for t in tris]
-
-
-def tri_na(t):
-    a, b, c = t
-    e1 = [b[i] - a[i] for i in range(3)]
-    e2 = [c[i] - a[i] for i in range(3)]
-    n = [e1[1] * e2[2] - e1[2] * e2[1],
-         e1[2] * e2[0] - e1[0] * e2[2],
-         e1[0] * e2[1] - e1[1] * e2[0]]
-    m = math.sqrt(sum(x * x for x in n))
-    if m < 1e-15:
-        return None, 0.0
-    return [x / m for x in n], m / 2
-
-
-# ---------------------------------------------------------------- ray casting
-def ray_spans(tris, x, y):
-    """Solid z intervals of the column through (x, y).  Moller-Trumbore with a
-    straight-down... up ray; the outward normal opposes the ray on entry, which
-    is how the parity is tracked."""
-    hits = []
-    ox, oy = x, y
-    for (a, b, c) in tris:
-        # 2D edge test first -- cheap reject for a vertical ray
-        if (max(a[0], b[0], c[0]) < ox or min(a[0], b[0], c[0]) > ox or
-                max(a[1], b[1], c[1]) < oy or min(a[1], b[1], c[1]) > oy):
-            continue
-        e1 = [b[i] - a[i] for i in range(3)]
-        e2 = [c[i] - a[i] for i in range(3)]
-        # p = d x e2 with d = (0,0,1)
-        px, py = -e2[1], e2[0]
-        det = e1[0] * px + e1[1] * py
-        if abs(det) < 1e-14:
-            continue
-        inv = 1.0 / det
-        tv = (ox - a[0], oy - a[1], -a[2])
-        u = (tv[0] * px + tv[1] * py) * inv
-        if u < -1e-9 or u > 1 + 1e-9:
-            continue
-        qx = tv[1] * e1[2] - tv[2] * e1[1]
-        qy = tv[2] * e1[0] - tv[0] * e1[2]
-        qz = tv[0] * e1[1] - tv[1] * e1[0]
-        v = qz * inv
-        if v < -1e-9 or u + v > 1 + 1e-9:
-            continue
-        t = (e2[0] * qx + e2[1] * qy + e2[2] * qz) * inv
-        n, _ = tri_na((a, b, c))
-        hits.append((t, 1 if n[2] < 0 else -1))      # +1 = entering
-    hits.sort()
-    out, depth, start = [], 0, None
-    for t, s in hits:
-        prev = depth
-        depth += s
-        if prev <= 0 and depth > 0:
-            start = t
-        elif prev > 0 and depth <= 0 and start is not None:
-            if t - start > 1e-7:
-                out.append((start, t))
-            start = None
-    return out
-
-
-def overlap(sa, sb):
-    worst = 0.0
-    for a0, a1 in sa:
-        for b0, b1 in sb:
-            worst = max(worst, min(a1, b1) - max(a0, b0))
-    return worst
-
-
 # ---------------------------------------------------------------- face planes
 def planes(tris, ref, tol=1e-5, min_area=5.0, min_tri=0.0):
-    rm = math.sqrt(sum(c * c for c in ref))
-    refn = [c / rm for c in ref]
-    acc = {}
-    for t in tris:
-        n, a = tri_na(t)
-        if (n is None or a < min_tri or
-                sum(n[i] * refn[i] for i in range(3)) < 1 - tol):
-            continue
-        d = sum(refn[i] * t[0][i] for i in range(3))
-        e = acc.setdefault(round(d, 2), [0.0, 0.0])
-        e[0] += d * a
-        e[1] += a
-    return sorted((v[0] / v[1], v[1]) for v in acc.values() if v[1] > min_area)
+    """(offset, area) of each face with normal `ref`, sorted by offset: a thin
+    view over mesh_planes.group_planes, which is where the grouping lives."""
+    return sorted((f["offset"], f["area"])
+                  for f in group_planes(tris, ref, tol, 2, min_area, min_tri))
 
 
 NORMALS = [("-x", (-1, 0, 0)), ("+x", (1, 0, 0)),
@@ -144,6 +65,11 @@ NORMALS = [("-x", (-1, 0, 0)), ("+x", (1, 0, 0)),
            ("-z", (0, 0, -1)), ("+z", (0, 0, 1)),
            ("seam-up", (0.0, -P.SEAM_SIN, P.SEAM_COS)),
            ("seam-down", (0.0, P.SEAM_SIN, -P.SEAM_COS))]
+
+
+def _col_spans(tris, x, y):
+    """Solid z-intervals of the vertical column through (x, y)."""
+    return axis_spans(tris, 2, x, y)
 
 
 def check_engraving(tris):
@@ -216,43 +142,6 @@ def check_engraving(tris):
             "margin_bottom": z0, "margin_top": P.Z_FRONT_TOP - z1}
 
 
-def _tri_dist(p, a, b, c):
-    """Distance from point p to triangle abc (Ericson, Real-Time Collision
-    Detection, ClosestPtPointTriangle)."""
-    def sub(u, v): return (u[0] - v[0], u[1] - v[1], u[2] - v[2])
-    def dot(u, v): return u[0] * v[0] + u[1] * v[1] + u[2] * v[2]
-    ab, ac, ap = sub(b, a), sub(c, a), sub(p, a)
-    d1, d2 = dot(ab, ap), dot(ac, ap)
-    if d1 <= 0 and d2 <= 0:
-        q = a
-    else:
-        bp = sub(p, b); d3, d4 = dot(ab, bp), dot(ac, bp)
-        if d3 >= 0 and d4 <= d3:
-            q = b
-        else:
-            vc = d1 * d4 - d3 * d2
-            if vc <= 0 and d1 >= 0 and d3 <= 0:
-                t = d1 / (d1 - d3); q = tuple(a[i] + t * ab[i] for i in range(3))
-            else:
-                cp = sub(p, c); d5, d6 = dot(ab, cp), dot(ac, cp)
-                if d6 >= 0 and d5 <= d6:
-                    q = c
-                else:
-                    vb = d5 * d2 - d1 * d6
-                    if vb <= 0 and d2 >= 0 and d6 <= 0:
-                        t = d2 / (d2 - d6); q = tuple(a[i] + t * ac[i] for i in range(3))
-                    else:
-                        va = d3 * d6 - d5 * d4
-                        if va <= 0 and (d4 - d3) >= 0 and (d5 - d6) >= 0:
-                            t = (d4 - d3) / ((d4 - d3) + (d5 - d6))
-                            q = tuple(b[i] + t * (c[i] - b[i]) for i in range(3))
-                        else:
-                            den = 1.0 / (va + vb + vc)
-                            v, w = vb * den, vc * den
-                            q = tuple(a[i] + ab[i] * v + ac[i] * w for i in range(3))
-    return math.sqrt(sum((p[i] - q[i]) ** 2 for i in range(3)))
-
-
 def _cap_stats(tris, face_abs, sg, y, z):
     """Height (or depth), base radius and centre of the cap on one face."""
     xf = sg * face_abs
@@ -321,7 +210,7 @@ def check_snap(rebuilt, ob, ot):
                         ("ORIGINAL bottom + ORIGINAL top", ob, ot)):
         worst, where = 0.0, None
         for x, y in cols:
-            o = overlap(ray_spans(A, x, y), ray_spans(B, x, y))
+            o = overlap(_col_spans(A, x, y), _col_spans(B, x, y))
             if o > worst:
                 worst, where = o, (x, y)
         verdict = "seats clear" if worst < 1e-3 else \
@@ -368,22 +257,13 @@ def check_snap(rebuilt, ob, ot):
         subprocess.run(["solvespace-cli", "export-mesh", "--chord-tol", "0.02",
                         "--output", out, src], capture_output=True)
         blank = load_stl(out)
-    worst = max(overlap(ray_spans(rebuilt["bottom"], x, y), ray_spans(blank, x, y))
+    worst = max(overlap(_col_spans(rebuilt["bottom"], x, y), _col_spans(blank, x, y))
                 for x, y in cols)
     print("  control: the same bottom against a top WITHOUT dimples overlaps "
           "by %.4f mm" % worst)
     if worst < 0.5 * P.BUMP_H:
         fail("the engagement test did not see a dome pushing into a dimple-less "
              "wall (%.4f mm); it would not notice a missing dimple" % worst)
-
-
-def _volume(tris):
-    v = 0.0
-    for a, b, c in tris:
-        v += (a[0] * (b[1] * c[2] - b[2] * c[1]) -
-              a[1] * (b[0] * c[2] - b[2] * c[0]) +
-              a[2] * (b[0] * c[1] - b[1] * c[0])) / 6.0
-    return v
 
 
 def _export_plain_bottom():
@@ -560,7 +440,7 @@ def main():
     for label, A, B in pairs:
         worst, where = 0.0, None
         for x, y in cols:
-            o = overlap(ray_spans(A, x, y), ray_spans(B, x, y))
+            o = overlap(_col_spans(A, x, y), _col_spans(B, x, y))
             if o > worst:
                 worst, where = o, (x, y)
         # the mating faces are designed to touch exactly, so anything under a

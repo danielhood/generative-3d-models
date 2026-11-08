@@ -22,10 +22,8 @@ since the source is the BLANK.  Slow in pure Python (a minute or so).
 """
 import math
 import os
-import subprocess
 import sys
 import tempfile
-from collections import defaultdict
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "..", "utilities"))
@@ -34,67 +32,11 @@ sys.path.insert(0, HERE)
 import check_ugp100 as C
 import build_ugp100 as builder
 import ugp100_params as P
+from mesh_compare import compare, print_report
+from slvs_cli import export_mesh
 from stl_io import load_stl
 
-CELL = 2.5
 THRESH = 0.25           # mm; below this a sample is "explained"
-
-
-class Grid:
-    """Uniform grid over triangles, for nearest-surface queries."""
-    def __init__(self, tris):
-        self.tris = tris
-        self.cells = defaultdict(list)
-        for i, t in enumerate(tris):
-            lo = [min(v[k] for v in t) for k in range(3)]
-            hi = [max(v[k] for v in t) for k in range(3)]
-            for ix in range(int(lo[0] // CELL), int(hi[0] // CELL) + 1):
-                for iy in range(int(lo[1] // CELL), int(hi[1] // CELL) + 1):
-                    for iz in range(int(lo[2] // CELL), int(hi[2] // CELL) + 1):
-                        self.cells[(ix, iy, iz)].append(i)
-
-    def nearest(self, p, limit=3.5):
-        """Distance to the nearest triangle, searched in growing shells of
-        cells, so a sample far from everything costs more but stays exact."""
-        cx, cy, cz = (int(p[k] // CELL) for k in range(3))
-        best = limit
-        for r in range(0, int(limit // CELL) + 2):
-            seen = set()
-            for dx in range(-r, r + 1):
-                for dy in range(-r, r + 1):
-                    for dz in range(-r, r + 1):
-                        if max(abs(dx), abs(dy), abs(dz)) != r:
-                            continue
-                        for i in self.cells.get((cx + dx, cy + dy, cz + dz), ()):
-                            if i in seen:
-                                continue
-                            seen.add(i)
-                            d = C._tri_dist(p, *self.tris[i])
-                            if d < best:
-                                best = d
-            # anything outside shell r is at least r*CELL away
-            if best <= r * CELL:
-                break
-        return best
-
-
-def samples(tris):
-    """Vertices, centroids and edge midpoints: dense enough that a patch of the
-    surface a millimetre across cannot hide between them."""
-    for a, b, c in tris:
-        yield a
-        yield tuple((a[i] + b[i] + c[i]) / 3.0 for i in range(3))
-        yield tuple((a[i] + b[i]) / 2.0 for i in range(3))
-        yield tuple((b[i] + c[i]) / 2.0 for i in range(3))
-
-
-def export(src_builder):
-    with tempfile.TemporaryDirectory() as tmp:
-        src = os.path.join(tmp, "x.slvs"); out = os.path.join(tmp, "x.stl")
-        src_builder().write(src)
-        subprocess.run(["solvespace-cli", "export-mesh", "--chord-tol", "0.02",
-                        "--output", out, src], capture_output=True)
-        return load_stl(out)
 
 
 def _seam_s(p):
@@ -143,43 +85,23 @@ def known_departure(q, part):
     return None
 
 
-def audit(name, orig_tris, rebuilt_tris, shift_back, part, top_n=12):
-    g = Grid(rebuilt_tris)
-    far, explained = [], defaultdict(int)
-    for p in samples(orig_tris):
-        q = tuple(p[i] - shift_back[i] for i in range(3))
-        d = g.nearest(q)
-        if d > THRESH:
-            why = known_departure(q, part)
-            if why:
-                explained[why] += 1
-            else:
-                far.append((q, d))
-    total = sum(explained.values()) + len(far)
-    print("%s: %d of the original's samples are more than %.2f mm from the rebuild"
-          % (name, total, THRESH))
-    for why, n in sorted(explained.items(), key=lambda kv: -kv[1]):
-        print("     %5d  explained: %s" % (n, why))
-    # cluster what is left by proximity
-    clusters = []
-    for q, d in sorted(far, key=lambda x: -x[1]):
-        for cl in clusters:
-            if math.dist(q, cl["c"]) < 3.0:
-                cl["pts"].append((q, d))
-                break
-        else:
-            clusters.append({"c": q, "pts": [(q, d)]})
-    clusters.sort(key=lambda cl: -max(d for _, d in cl["pts"]))
-    print("     %5d  UNEXPLAINED, in %d clusters%s" %
-          (len(far), len(clusters), "" if clusters else "  -- nothing left over"))
-    for cl in clusters[:top_n]:
-        pts = [q for q, _ in cl["pts"]]
-        ctr = tuple(sum(p[i] for p in pts) / len(pts) for i in range(3))
-        print("         worst %.2f mm  %4d samples  around x=%7.2f y=%7.2f z=%7.2f  "
-              "spread %.1f x %.1f x %.1f"
-              % (max(d for _, d in cl["pts"]), len(pts), ctr[0], ctr[1], ctr[2],
-                 *(max(p[i] for p in pts) - min(p[i] for p in pts) for i in range(3))))
-    return clusters
+def audit(name, orig_tris, rebuilt_tris, shift_back, part):
+    """One part: compare the original with the rebuild, setting aside regions
+    that are recorded decisions.  `shift_back` is the original's frame origin in
+    the rebuild's; the comparison itself is mesh_compare's."""
+    to_dst = tuple(-c for c in shift_back)
+    res = compare(orig_tris, rebuilt_tris, to_dst=to_dst, thresh=THRESH,
+                  explain=lambda q: known_departure(q, part))
+    print_report(res, name, THRESH, top_n=12)
+    return res["clusters"]
+
+
+def _export(make):
+    """Build a part with `make()` and triangulate it."""
+    with tempfile.TemporaryDirectory() as tmp:
+        src = os.path.join(tmp, "x.slvs")
+        make().write(src)
+        return export_mesh(src, 0.02)["tris"]
 
 
 def main():
@@ -197,8 +119,8 @@ def main():
     ot = load_stl(C.ORIG["top"])
 
     if a.prove:
-        rb = export(lambda: builder.build_bottom(label=False, bumps=False))
-        rt = export(lambda: builder.build_top(dimples=False))
+        rb = _export(lambda: builder.build_bottom(label=False, bumps=False))
+        rt = _export(lambda: builder.build_top(dimples=False))
         cb = audit("BOTTOM, domes left out", ob, rb, C.TO_ORIG, "bottom")
         print()
         ct = audit("TOP, dimples left out", ot, rt,
@@ -221,8 +143,8 @@ def main():
         return 0 if ok else 1
 
     rb = load_stl(a.bottom_stl) if a.bottom_stl else \
-        export(lambda: builder.build_bottom(label=False))
-    rt = load_stl(a.top_stl) if a.top_stl else export(lambda: builder.build_top())
+        _export(lambda: builder.build_bottom(label=False))
+    rt = load_stl(a.top_stl) if a.top_stl else _export(lambda: builder.build_top())
     cb = audit("BOTTOM", ob, rb, C.TO_ORIG, "bottom")
     print()
     ct = audit("TOP", ot, rt, tuple(C.TO_ORIG[i] + C.TOP_OFF[i] for i in range(3)), "top")

@@ -40,80 +40,22 @@ sys.path.insert(0, HERE)
 
 from slvs_write import (Sketch, ENT_ORIGIN, UNION, DIFFERENCE,
                         POINTS_COINCIDENT, HORIZONTAL, VERTICAL,
-                        PT_PT_DISTANCE, SYMMETRIC_HORIZ, SYMMETRIC_VERT,
-                        EQUAL_RADIUS, DIAMETER, ARC_LINE_TANGENT,
-                        AT_MIDPOINT, ANGLE, TWO_SIDED, VERTICAL,
-                        PT_IN_PLANE, PT_PLANE_DISTANCE,
-                        ENT_XY_WORKPLANE, ENT_YZ_WORKPLANE, ENT_ZX_WORKPLANE,
-                        HORIZONTAL as HORIZ)
+                        PT_PT_DISTANCE, AT_MIDPOINT, ANGLE,
+                        TWO_SIDED, PT_PLANE_DISTANCE,
+                        ENT_XY_WORKPLANE, ENT_YZ_WORKPLANE, ENT_ZX_WORKPLANE)
+from slvs_shapes import rect, rounded_rect, datums, spherical_cap
+import slvs_text
 import ugp100_params as P
-import text_fit
 
 
 # --------------------------------------------------------------------------
 # sketch helpers
 # --------------------------------------------------------------------------
-def rect(S, g, wp, hx, hy, dim=True):
-    """Closed sharp-cornered rectangle, |u| <= hx, |v| <= hy, counter-clockwise."""
-    c = [(-hx, -hy), (hx, -hy), (hx, hy), (-hx, hy)]
-    L = [S.line(g, wp, c[i], c[(i + 1) % 4]) for i in range(4)]
-    for i in range(4):
-        S.constraint(POINTS_COINCIDENT, g, wp, ptA=L[i][2], ptB=L[(i + 1) % 4][1])
-    S.constraint(HORIZONTAL, g, wp, entityA=L[2][0])
-    S.constraint(VERTICAL, g, wp, entityA=L[3][0])
-    if not dim:
-        S.constraint(HORIZONTAL, g, wp, entityA=L[0][0])
-        S.constraint(VERTICAL, g, wp, entityA=L[1][0])
-    if dim:
-        # symmetric-h holds a horizontal edge's two ends at +-u, which makes it
-        # horizontal as well -- so it replaces HORIZONTAL on that edge rather
-        # than joining it (the GUI deletes the redundant one for you).
-        S.constraint(SYMMETRIC_HORIZ, g, wp, ptA=L[0][1], ptB=L[0][2])
-        S.constraint(SYMMETRIC_VERT, g, wp, ptA=L[1][1], ptB=L[1][2])
-        S.constraint(PT_PT_DISTANCE, g, wp, valA=2 * hx, ptA=L[0][1], ptB=L[0][2],
-                     disp=(0.0, -hy - 6.0, 0.0))
-        S.constraint(PT_PT_DISTANCE, g, wp, valA=2 * hy, ptA=L[1][1], ptB=L[1][2],
-                     disp=(hx + 6.0, 0.0, 0.0))
-    return L
-
-
-def rounded_rect(S, g, wp, hx, hy, r, dim=True):
-    """Closed rounded rectangle: 4 lines + 4 counter-clockwise corner arcs."""
-    L = [S.line(g, wp, a, b) for a, b in
-         [((-hx + r, -hy), (hx - r, -hy)),
-          ((hx, -hy + r), (hx, hy - r)),
-          ((hx - r, hy), (-hx + r, hy)),
-          ((-hx, hy - r), (-hx, -hy + r))]]
-    A = [S.arc(g, wp, c, s, e) for c, s, e in
-         [((hx - r, -hy + r), (hx - r, -hy), (hx, -hy + r)),
-          ((hx - r, hy - r), (hx, hy - r), (hx - r, hy)),
-          ((-hx + r, hy - r), (-hx + r, hy), (-hx, hy - r)),
-          ((-hx + r, -hy + r), (-hx, -hy + r), (-hx + r, -hy))]]
-    for i in range(4):
-        S.constraint(POINTS_COINCIDENT, g, wp, ptA=L[i][2], ptB=A[i][2])
-        S.constraint(POINTS_COINCIDENT, g, wp, ptA=A[i][3], ptB=L[(i + 1) % 4][1])
-    S.constraint(HORIZONTAL, g, wp, entityA=L[2][0])
-    S.constraint(VERTICAL, g, wp, entityA=L[3][0])
-    if not dim:
-        S.constraint(HORIZONTAL, g, wp, entityA=L[0][0])
-        S.constraint(VERTICAL, g, wp, entityA=L[1][0])
-    for i in range(4):
-        S.constraint(ARC_LINE_TANGENT, g, wp, entityA=A[i][0], entityB=L[i][0],
-                     other=False)
-        S.constraint(ARC_LINE_TANGENT, g, wp, entityA=A[i][0],
-                     entityB=L[(i + 1) % 4][0], other=True)
-    for i in range(1, 4):
-        S.constraint(EQUAL_RADIUS, g, wp, entityA=A[0][0], entityB=A[i][0])
-    if dim:
-        S.constraint(DIAMETER, g, wp, valA=2 * r, entityA=A[0][0], other=True,
-                     disp=(hx + 3.0, -hy - 3.0, 0.0))
-        S.constraint(SYMMETRIC_HORIZ, g, wp, ptA=L[0][1], ptB=L[0][2])
-        S.constraint(SYMMETRIC_VERT, g, wp, ptA=L[1][1], ptB=L[1][2])
-        S.constraint(PT_PT_DISTANCE, g, wp, valA=2 * (hx - r), ptA=L[0][1], ptB=L[0][2],
-                     disp=(0.0, -hy - 6.0, 0.0))
-        S.constraint(PT_PT_DISTANCE, g, wp, valA=2 * (hy - r), ptA=L[1][1], ptB=L[1][2],
-                     disp=(hx + 6.0, 0.0, 0.0))
-    return L, A
+# ---- visibility ----
+# Everything except the datums and the final operation of each part is marked
+# not-visible: the scaffolding sketches include cutters sized to swallow the
+# whole box, and with them all shown the file opens as an unreadable thicket of
+# wireframe instead of as the part.  Unhide them in the GUI when editing.
 
 
 XY_U, XY_V = (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)
@@ -145,23 +87,6 @@ def seam_cover(S, name, origin_pt, z0, z_from, z_to, up, visible=False):
     rect(S, g, wp, hu, hv)
     S.extrude(name, g, tuple(c * reach / 2.0 for c in direction),
               combine=DIFFERENCE, visible=visible)
-
-
-# Everything except the datums and the final operation of each part is marked
-# not-visible: the scaffolding sketches include cutters sized to swallow the
-# whole box, and with them all shown the file opens as an unreadable thicket of
-# wireframe instead of as the part.  Unhide them in the GUI when editing.
-def datums(S, points):
-    """One DRAWING_3D group holding the model's datum points, each pinned by
-    three dimensions.  Everything that has to sit at a particular height hangs
-    off one of these rather than off a bare extrude length."""
-    g = S.group_3d("datums")
-    out = []
-    for xyz in points:
-        _, pt = S.datum_point(g, xyz)
-        S.lock_point(g, pt, xyz)
-        out.append(pt)
-    return out
 
 
 def groove_cutter(S, origin_pt, hy, depth, visible=False):
@@ -305,29 +230,16 @@ def snap_caps(S, kind):
     """The four spherical caps that make the snap: domes added to the bottom's
     lip (`kind` = "bump") or dimples cut into the top's groove walls ("dimple").
 
-    A cap is a revolved quarter-disc.  The profile is a closed triangle of
-    three edges, drawn in a horizontal plane through the cap's centre with
-    u = x and v = y:
-
-        C -- the centre of the sphere, on the cap's axis, just INSIDE the face
-        A -- the apex, on the axis, `h` outside the face
-        E -- on the sphere's equator, R off the axis
-
-    with an edge C-A that is the axis, an edge C-E square to it, and an arc
-    E..A of the sphere.  Revolving that about C-A gives the cap PLUS the
-    hemisphere behind it, which sits inside the lip (or in the empty groove) --
-    a cap of the same size cut off exactly at the face would leave a boolean
-    face coincident with the lip's, and coincident faces are what these
-    booleans handle worst.
-
-    An extrude cannot do this: its end caps are flat, and the only extrude-
-    shaped bump is a flat-topped boss.
+    One cap per (face, position): two faces, left and right, each with the two
+    positions in P.SNAP_POINTS.  Each is built by `slvs_shapes.spherical_cap`,
+    which explains the profile and why it revolves a hemisphere rather than a bare
+    cap.  Their centres are the part's own data: see the SNAP_POINTS note in
+    ugp100_params.py.
     """
     bump = kind == "bump"
     xf_abs = P.LIP_HX if bump else P.GROOVE_HX      # the face the cap stands on
     h = P.BUMP_H if bump else P.DENT_DEPTH          # apex height / depth
     R = P.BUMP_SPHERE_R if bump else P.DENT_SPHERE_R
-    cin = R - h                                     # sphere centre, inside the face
     combine = UNION if bump else DIFFERENCE
 
     pts, caps = [], []
@@ -341,35 +253,8 @@ def snap_caps(S, kind):
     for i, ((sg, y, z), pt) in enumerate(zip(caps, dpts)):
         tag = "%s-%s-%s" % (kind, "L" if sg < 0 else "R",
                             "front" if y < 0 else "back")
-        g, wp = S.workplane_group(tag + "-profile", pt, (1.0, 0.0, 0.0),
-                                  (0.0, 1.0, 0.0), visible=False)
-        C = (-sg * cin, 0.0)                        # relative to the face point
-        A = (sg * h, 0.0)
-        E = (-sg * cin, R)
-        axis = S.line(g, wp, C, A)
-        side = S.line(g, wp, C, E)
-        # the arc runs counter-clockwise: E -> A on the left face (90 -> 180
-        # degrees about C), A -> E on the right (0 -> 90)
-        arc = S.arc(g, wp, C, E, A) if sg < 0 else S.arc(g, wp, C, A, E)
-        a_start, a_end = (arc[2], arc[3])
-        S.constraint(POINTS_COINCIDENT, g, wp, ptA=axis[1], ptB=side[1])
-        S.constraint(POINTS_COINCIDENT, g, wp, ptA=arc[1], ptB=axis[1])
-        S.constraint(POINTS_COINCIDENT, g, wp, ptA=(a_end if sg < 0 else a_start),
-                     ptB=axis[2])
-        S.constraint(POINTS_COINCIDENT, g, wp, ptA=(a_start if sg < 0 else a_end),
-                     ptB=side[2])
-        S.constraint(HORIZ, g, wp, entityA=axis[0])
-        S.constraint(VERTICAL, g, wp, entityA=side[0])
-        S.constraint(PT_PT_DISTANCE, g, wp, valA=R, ptA=side[1], ptB=side[2],
-                     disp=(-3.0 * sg, R / 2.0, 0.0))
-        # the sphere's centre is the one point that is placed: x and y against
-        # the reference planes (the sketch plane itself is z = the datum's z)
-        S.constraint(PT_PLANE_DISTANCE, g, valA=sg * xf_abs - sg * cin,
-                     ptA=axis[1], entityA=ENT_YZ_WORKPLANE)
-        S.constraint(PT_PLANE_DISTANCE, g, valA=y, ptA=axis[1],
-                     entityA=ENT_ZX_WORKPLANE)
-        S.lathe(tag, g, axis[0], axis[1], combine=combine,
-                visible=(not bump and i == n_total - 1))
+        spherical_cap(S, tag, pt, sg * xf_abs, sg, y, h, R, combine,
+                      visible=(not bump and i == n_total - 1))
 
 
 def text_pocket(S, text=None):
@@ -382,14 +267,14 @@ def text_pocket(S, text=None):
     the wall; its far end is an exact distance, so how much wall is left is a
     dimension rather than a hope.
 
-    Sized by measurement: text_fit.measure() asks SolveSpace for the string's
+    Sized by measurement: slvs_text.measure() asks SolveSpace for the string's
     aspect ratio and ink box (advance width is not ink width, and cap height is
     not ink height -- round letters overshoot), and the cap height is chosen as
     large as the PANEL_W x PANEL_H panel allows.  The ink box is then centred in
     the panel rather than the text's own origin.
     """
     text = P.TEXT if text is None else text
-    f = text_fit.fit(text, P.TEXT_FONT, P.PANEL_W, P.PANEL_H)
+    f = slvs_text.fit(text, P.TEXT_FONT, P.PANEL_W, P.PANEL_H)
     cap, ou, ov = f["cap"], f["ou"], f["ov"]
 
     y_plane = -(P.EXT_HY + P.TEXT_LEAD)
