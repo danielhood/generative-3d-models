@@ -40,7 +40,7 @@ path, or just `cd` into it.
 | `slvs_cli.py` | Honest wrappers around `solvespace-cli`: `export_mesh` (noise filtered, boolean failure flagged), `count_records`, `regenerate_counts`, `thumbnail`. Documents what is and is not deterministic. |
 | `slvs_check.py` | **Is a generated .slvs actually sound?** Mesh, then constraints-survive-reload, then a jitter test that the sketch is held by its constraints and not its coordinates. Each exists because the one before let a defect through. |
 | `slvs_info.py` | Read a .slvs: groups with counts, and resolve a GUI handle like `c039` to its type, group and entities. |
-| `slvs_shapes.py` | Fully constrained (0 DOF, 0 redundant) sketch shapes: `rect`, `rounded_rect`, `datums`, and `spherical_cap` (a lathed dome or dimple). |
+| `slvs_shapes.py` | Fully constrained (0 DOF, 0 redundant) sketch shapes: `rect`, `rect_at` (an off-centre bar; several share one sketch), `rounded_rect`, `datums`, `corner_wedge` (a 45 degree chamfer cutter), and `spherical_cap` (a lathed dome or dimple, on a face square to x or y). For a dimple `sg` is the direction the APEX points, i.e. into the material. |
 | `slvs_text.py` | Measure and fit a string in a SolveSpace font, using SolveSpace; refuses characters the font lacks. |
 | `selftest.py` | **Run this after touching anything here.** Known-answer tests for every mesh_* and slvs_* tool, and files that are deliberately broken and MUST be rejected. |
 

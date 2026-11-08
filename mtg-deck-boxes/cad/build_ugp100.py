@@ -43,7 +43,7 @@ from slvs_write import (Sketch, ENT_ORIGIN, UNION, DIFFERENCE,
                         PT_PT_DISTANCE, AT_MIDPOINT, ANGLE,
                         TWO_SIDED, PT_PLANE_DISTANCE,
                         ENT_XY_WORKPLANE, ENT_YZ_WORKPLANE, ENT_ZX_WORKPLANE)
-from slvs_shapes import rect, rounded_rect, datums, spherical_cap
+from slvs_shapes import rect, rounded_rect, datums, spherical_cap, corner_wedge
 import slvs_text
 import ugp100_params as P
 
@@ -135,38 +135,6 @@ def groove_cutter(S, origin_pt, hy, depth, visible=False):
               subtype=TWO_SIDED, visible=visible)
 
 
-def _corner_wedge(S, g, wp, corner, along_wall, along_face, ch, over, pin):
-    """One 45 deg chamfer, drawn in the plane perpendicular to the edge it cuts.
-
-    `corner` is where the groove wall meets the seam face; `along_wall` and
-    `along_face` are unit directions leading away from it, up the wall and
-    outboard across the seam face.  The chamfer itself is the line between the
-    two points `ch` along each.
-
-    The triangle actually drawn is that one pushed `over` mm back along both
-    directions, which leaves its hypotenuse on exactly the same line (the two
-    offsets cancel) while moving its two legs out of the part and into open
-    space.  Without that, the legs would sit exactly on the groove wall and on
-    the seam face, and a cutter face coincident with a face of the part is the
-    boolean's least favourite thing.
-
-    `pin` fixes a sketch point with two dimensions; three pinned vertices plus
-    three coincidences is 12 equations for the triangle's 12 params.
-    """
-    def pt(a, b):
-        return (corner[0] - over * (along_wall[0] + along_face[0]) +
-                a * along_wall[0] + b * along_face[0],
-                corner[1] - over * (along_wall[1] + along_face[1]) +
-                a * along_wall[1] + b * along_face[1])
-    leg = ch + 2 * over
-    tri = [pt(0.0, 0.0), pt(leg, 0.0), pt(0.0, leg)]
-    L = [S.line(g, wp, tri[i], tri[(i + 1) % 3]) for i in range(3)]
-    for i in range(3):
-        S.constraint(POINTS_COINCIDENT, g, wp, ptA=L[i][2], ptB=L[(i + 1) % 3][1])
-    for i in range(3):
-        pin(g, wp, L[i][1], tri[i])
-
-
 def mouth_chamfer(S, pt_seam):
     """The lead-in bevel around the mouth of the groove.
 
@@ -195,7 +163,7 @@ def mouth_chamfer(S, pt_seam):
                      entityA=ENT_XY_WORKPLANE)
 
     for sg in (1, -1):
-        _corner_wedge(S, g, wp,
+        corner_wedge(S, g, wp,
                       corner=(sg * P.GROOVE_HY, sg * P.GROOVE_HY * t),
                       along_wall=(0.0, 1.0),
                       along_face=(sg * c, sg * sn),
@@ -216,7 +184,7 @@ def mouth_chamfer(S, pt_seam):
                      entityA=ENT_XY_WORKPLANE)
 
     for sg in (1, -1):
-        _corner_wedge(S, g, wp,
+        corner_wedge(S, g, wp,
                       corner=(sg * P.GROOVE_HX, 0.0),
                       along_wall=(0.0, -1.0),
                       along_face=(float(sg), 0.0),

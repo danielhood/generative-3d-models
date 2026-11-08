@@ -179,12 +179,12 @@ def solvespace_tests():
         return
     from slvs_write import (Sketch, ENT_ORIGIN, UNION, DIFFERENCE, HORIZONTAL, POINTS_COINCIDENT,
                             TWO_SIDED, dof_report)
-    from slvs_shapes import rect, datums, spherical_cap
+    from slvs_shapes import rect, rect_at, datums, spherical_cap
     from slvs_check import check_file, jitter_file
     from slvs_info import load, describe_constraint, summary
     from mesh_features import features_beyond, fit_sphere_cap
     from mesh_compare import compare
-    from mesh_geom import volume
+    from mesh_geom import volume, bbox
 
     H, BASE_R = 0.7721, 1.299
     R = (BASE_R ** 2 + H ** 2) / (2 * H)
@@ -265,6 +265,51 @@ def solvespace_tests():
         # source's own surface lies under or inside the other mesh's extra
         # feature, which a coarse flat face reaches only along its diagonal.
         # See mesh_compare's limits.
+
+        print("\nslvs_shapes: rect_at, and a cap on a face square to y")
+        S2 = Sketch()
+        g2, wp2 = S2.workplane_group("bars", ENT_ORIGIN, (1, 0, 0), (0, 1, 0))
+        rect_at(S2, g2, wp2, 30.0, -20.0, 5.0, 8.0)          # off-centre
+        rect_at(S2, g2, wp2, -30.0, 15.0, 2.0, 3.0)          # a second, disjoint, in the SAME sketch
+        S2.extrude("bars", g2, (0.0, 0.0, 5.0), combine=UNION)
+        rows = [r for r in dof_report(S2, S2.group_names) if r["name"] == "bars"]
+        check("two bars in one sketch group are 32 unknowns / 32 equations, 0 DOF",
+              rows and rows[0]["unknowns"] == 32 and rows[0]["dof"] == 0 and rows[0]["redundant"] == 0, rows)
+        t2 = export_mesh(write("bars.slvs", S2))["tris"]
+        lo, hi = bbox(t2)
+        check("...and they land where asked, (25..35, -28..-12) and (-32..-28, 12..18)",
+              t2 is not None and close(volume(t2), 2 * 5 * 16 * 10 + 4 * 6 * 10, 0.01)
+              and close(lo[0], -32, 1e-3) and close(hi[0], 35, 1e-3) and close(lo[1], -28, 1e-3)
+              and close(hi[1], 18, 1e-3), (volume(t2), lo, hi))
+        S3 = Sketch()
+        g3, wp3 = S3.workplane_group("base", ENT_ORIGIN, (1, 0, 0), (0, 1, 0))
+        rect(S3, g3, wp3, 10.0, 10.0)
+        S3.extrude("block", g3, (0.0, 0.0, 10.0), combine=UNION)
+        (pt3,) = datums(S3, [(4.0, 10.0, 10.0)])              # on the +y face, x = 4, z = 10
+        spherical_cap(S3, "bump", pt3, 10.0, +1, 4.0, H, R, UNION, visible=True, along="y")
+        rows = dof_report(S3, S3.group_names)
+        check("a y-axis cap profile is 14 unknowns / 14 equations, 0 DOF",
+              all(r["dof"] == 0 and r["redundant"] == 0 for r in rows if r["equations"]),
+              [(r["name"], r["dof"], r["redundant"]) for r in rows])
+        t3 = export_mesh(write("ycap.slvs", S3))["tris"]
+        f3 = features_beyond(t3, 1, 10.0, +1)
+        check("it stands off the +y face, once, at the right height",
+              len(f3) == 1 and close(f3[0]["height"], H, 0.002), [f["height"] for f in f3])
+        check("...centred at (x=4, z=10) with base radius 1.299",
+              len(f3) == 1 and close(f3[0]["centre"][0], 4.0, 0.01) and close(f3[0]["centre"][1], 10.0, 0.01)
+              and close(f3[0]["half_extents"][0], BASE_R, 0.01), f3 and (f3[0]["centre"], f3[0]["half_extents"]))
+        S4 = Sketch()
+        g4, wp4 = S4.workplane_group("base", ENT_ORIGIN, (1, 0, 0), (0, 1, 0))
+        rect(S4, g4, wp4, 10.0, 10.0)
+        S4.extrude("block", g4, (0.0, 0.0, 10.0), combine=UNION)
+        (pt4,) = datums(S4, [(0.0, -10.0, 10.0)])             # on the -y face
+        # the apex points INTO the block (toward +y), so sg = +1 even though the
+        # face's outward normal is -y; see the sg note in spherical_cap
+        spherical_cap(S4, "dimple", pt4, -10.0, +1, 0.0, H, R, DIFFERENCE, visible=True, along="y")
+        t4 = export_mesh(write("ydimple.slvs", S4))["tris"]
+        check("a y-axis DIMPLE on the -y face removes the cap's volume",
+              t4 is not None and close(8000.0 - volume(t4), math.pi * H * (3 * BASE_R ** 2 + H * H) / 6, 0.15),
+              volume(t4))
 
         print("\nslvs_check: it must PASS a sound file and FAIL broken ones")
         p = check_file(good, amp=0.3, seeds=2, out=lambda *_: None)
