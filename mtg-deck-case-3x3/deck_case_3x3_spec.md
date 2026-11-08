@@ -4,8 +4,9 @@ Parts: `cad/build_case.py` -> `deck_case_3x3_bottom.slvs` (the tray),
 `deck_case_3x3_top.slvs` (the lid), and `.stl` exports beside them
 Parameters: `cad/case_params.py`  ·  Verification: `cad/check_case.py`
 Source: the single deck box, `../mtg-deck-boxes/` (its spec: `ultra_guard_pro_100_spec.md`)
-Revision: rev A, 2026-11-08
-Status: **modelled and mesh-verified; not printed.**
+Revision: rev B, 2026-11-08
+Status: **modelled and mesh-verified; first print (PLA) fits and snaps as designed.**
+How to use it, and what every variable controls: [`README.md`](README.md).
 
 A case that holds nine of the single Ultra Guard Pro 100+ boxes' card slots in a
 3 x 3 grid: one tray, one lid. It is the single box multiplied, and almost every
@@ -34,7 +35,8 @@ single box's slopes front to back.
 ## 2. What the brief left open, and what I assumed
 
 Each of these has a sensible default and a one-line change; none is hard to undo.
-**Please confirm or overrule them.**
+**All seven were confirmed as correct on 2026-11-08**, after the first print. The
+"if you meant otherwise" column is kept as the record of what each one controls.
 
 | # | Not specified | Assumed | If you meant otherwise |
 |---|---|---|---|
@@ -117,10 +119,11 @@ y.** So:
 
 The single box only had x-face domes, so this never arose there. It means the
 front and back snaps are ~9% weaker and the lid has ~0.07 mm more play in y. It is not
-a defect, but it is not what "the same dome on every side" suggests. If the printed
-lid is looser front-to-back than side-to-side, the fix is to raise the y-face domes
-by 0.066 (or make the y-face dimples that much shallower); not done, because it is
-a guess about a print that has not happened.
+a defect, but it is not what "the same dome on every side" suggests. **The first
+print did not show it:** the fit was reported as neither too loose nor too tight,
+so no correction was made. If a printed lid is ever looser front-to-back than
+side-to-side, the fix is to raise the y-face domes by 0.066 (or make the y-face
+dimples that much shallower).
 
 This was found by the verification, not by the build: the check that measures the
 nearest approach of dome to dimple first used the x figure for all twelve with a
@@ -156,9 +159,18 @@ measures exactly, so they are benign; see `utilities/slvs_cli.py`.
 
 ---
 
-## 7. Open items and risks
+## 7. Print results, open items and risks
 
-* **Not printed.** Everything here is mesh verification.
+* **Printed once, in PLA, 2026-11-08: the lid locks perfectly.** Neither too
+  tight nor too loose, and with the same feel as prints of the single box's
+  original STLs (printed in PLA and PETG). Original-STL and rebuilt single-box
+  halves also interchange (an original top on a new bottom, and the reverse), which
+  says the lip, groove, clearances and snap carried over from the originals are
+  right, and they are what this case imports. Not tried: PETG for the case; a
+  second printer or nozzle; a print after long storage.
+* **The 12-dome risk below did not materialise** in this print. The closing
+  force was reported as right. The numbers are kept because they are what to
+  look at if a different material or printer changes that.
 * **The case is 12 domes' worth of snap, not 4.** Each is 0.77 mm of interference
   against walls that have to flex, and the case closes along a 245 mm edge. Twelve
   against the single box's four is the only number here: how that adds up to a closing
@@ -167,7 +179,8 @@ measures exactly, so they are benign; see `utilities/slvs_cli.py`.
   `DENT_DEPTH`) in the single box's parameters is the knob; the tray's long wall
   panels between dividers are what flex, so the first thing to look at after a
   print is whether the lid can be started at all.
-* **y-face domes are weaker** than x-face ones (section 5).
+* **y-face domes are weaker** than x-face ones (section 5); not noticeable in the
+  first print.
 * **The lid's dividers meet its front and back walls only above the groove roof**
   (they run 1 mm into the wall there); below the roof the groove is open, so near
   the seam each divider ends against empty groove, 0.15 above the tray's divider. It
