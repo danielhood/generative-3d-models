@@ -78,6 +78,43 @@ MOUTH_CHAMFER = 0.6
 # face is ever coincident with a face of the part
 CHAMFER_OVER = 1.0
 
+# ---- snap bumps and dents ---------------------------------------------------
+# The lid is held shut by four small domes on the bottom's lip, two on each x
+# face (one toward the front, one toward the back), that seat in matching
+# dimples in the top's groove walls.  The lip is 0.012 mm inside the groove, so
+# each dome's ~0.77 mm height is real interference while the lid slides over it:
+# the walls flex, and the dome clicks into the dimple.  Without them nothing
+# keeps the halves together.
+#
+# Both are spherical caps.  In the unscaled base design the bump is a cap of a
+# 1.5 mm sphere, 0.75 high (base radius sqrt(1.5^2 - 0.75^2) = 1.299 -- that is
+# where the odd-looking 1.299 comes from); the non-uniform scale then makes its
+# base 1.553 (y) x 1.299 (z) and 0.772 high.  The dimple is a cap of a ~1.70 mm
+# sphere with a CIRCULAR 1.433 mm mouth, i.e. it was made after the scaling and
+# not scaled with the rest.  SolveSpace has no non-uniform scale, so the bump is
+# built as a circular cap that keeps the two dimensions that govern the click:
+#   - its HEIGHT, 0.7721, and
+#   - its base radius IN z, 1.299, which sets the profile along the direction
+#     the lid slides (vertical), so how hard it is to get over is unchanged.
+# What is lost is the 0.25 mm of extra width in y each side, a little contact
+# area along the wall.  The dimple is reproduced exactly.
+BUMP_H = 0.7721
+BUMP_BASE_R = 1.299
+BUMP_SPHERE_R = (BUMP_BASE_R ** 2 + BUMP_H ** 2) / (2 * BUMP_H)       # 1.4788
+DENT_DEPTH = 0.7857               # 0.7869 left, 0.7845 right in the source
+DENT_MOUTH_R = 1.433
+DENT_SPHERE_R = (DENT_MOUTH_R ** 2 + DENT_DEPTH ** 2) / (2 * DENT_DEPTH)  # 1.6998
+# Where the dimple's apex is further out than the bump's, in the assembled
+# pair: the gap the dome has to seat into.  Measured 0.0254 in the source.
+#   (GROOVE_HX + DENT_DEPTH) - (LIP_HX + BUMP_H)
+# Centres, (y, z) in this frame, identical on the left and right faces.  The
+# source's dimples are coaxial with its domes to within 0.031 mm (dy <= 0.009,
+# dz +-0.031), so one set of positions serves both.  They are NOT quite on a
+# line parallel to the seam (2.505 and 2.809 mm above it), which is why they
+# are listed rather than derived.
+SNAP_POINTS = ((-31.7434, 35.2115),     # toward the front (-y)
+               (33.8296, 67.1883))      # toward the back (+y)
+
 # ---- engraved label on the bottom's front face ------------------------------
 # Text is cut INTO the exterior face of the front (-y) wall, inside a centred
 # PANEL_W x PANEL_H panel, TEXT_DEPTH deep.  "Front" is the low, wide face --

@@ -8,7 +8,9 @@ one wrong turn to get right the first time.
 
 All scripts are stdlib-only Python 3 except `mesh_rasterize.py`,
 `raster.py`, `printability.py` and `pattern_trace.py`, which need Pillow
-(`pip install Pillow`). Nothing here depends on anything outside
+(`pip install Pillow`), and `mesh_section.plot()`, which does too (the rest of
+that file does not). The `slvs_*` tools that run SolveSpace need `solvespace-cli`
+on the PATH. Nothing here depends on anything outside
 this folder except where noted; import by adding this directory to your
 path, or just `cd` into it.
 
@@ -29,6 +31,18 @@ path, or just `cd` into it.
 | `pattern_trace.py` | **The source-insert -> pattern-`.scad` pipeline**, with the two checks every coaster here has failed at least once: `sense_of()` (is a traced loop the artwork or the hole around it?) and `orientation_iou()` (which way up, and from which side?). Also `component_polygons()`, which hides the walk-or-repair decision, and `emit_scad()`. Worked example: `coasters/trace_tree_of_life.py`. |
 | `projection_trace_recipe.scad` | The OpenSCAD half of `dxf_trace.py`'s recipe: flatten a relief to 2D and export to DXF. |
 | `slvs_write.py` | **Write SolveSpace `.slvs` files from Python.** Groups, workplanes at any orientation, line/arc requests, params, constraints — plus `dof_report()`, which row-reduces each group's Jacobian to say whether it is actually constrained. The handle arithmetic and the format's quirks are in its docstring; the traps that bite are in the "when to reach for which" entry below. |
+| `mesh_geom.py` | The primitives every mesh tool needs and used to define privately: `volume`, `bbox`, `shift`, `tri_normal_area`, exact `point_tri_distance`, and `SurfaceIndex` (nearest-surface queries through a grid, so tens of thousands of them are fast). |
+| `mesh_rays.py` | **Ray casting: where along a line is there material?** `axis_spans` (axis-aligned, fast), `ray_spans` (any direction), `is_inside`, `overlap`, `max_overlap`. The tool for "do these two parts collide here" and "how thick is this wall". |
+| `mesh_section.py` | Slice a mesh with an axis-aligned plane into outline loops; `plot()` overlays several meshes' sections in one PNG. What turns an unexplained number into a picture. |
+| `mesh_planes.py` | Find a mesh's flat faces and measure them to four decimals: `group_planes`, `axis_planes`, `fit_plane`. How the original Ultra Guard Pro was found to be a scaled design. |
+| `mesh_features.py` | **Find and measure bumps and dimples on a flat face**, and fit a sphere to them: `features_beyond`, `fit_sphere_cap`. Planar checks cannot see these. |
+| `mesh_compare.py` | **What does one mesh have that another lacks?** Samples a source densely and finds where it is far from a rebuild, with an `explain` hook for recorded decisions. The check that finds what the others cannot. |
+| `slvs_cli.py` | Honest wrappers around `solvespace-cli`: `export_mesh` (noise filtered, boolean failure flagged), `count_records`, `regenerate_counts`, `thumbnail`. Documents what is and is not deterministic. |
+| `slvs_check.py` | **Is a generated .slvs actually sound?** Mesh, then constraints-survive-reload, then a jitter test that the sketch is held by its constraints and not its coordinates. Each exists because the one before let a defect through. |
+| `slvs_info.py` | Read a .slvs: groups with counts, and resolve a GUI handle like `c039` to its type, group and entities. |
+| `slvs_shapes.py` | Fully constrained (0 DOF, 0 redundant) sketch shapes: `rect`, `rounded_rect`, `datums`, and `spherical_cap` (a lathed dome or dimple). |
+| `slvs_text.py` | Measure and fit a string in a SolveSpace font, using SolveSpace; refuses characters the font lacks. |
+| `selftest.py` | **Run this after touching anything here.** Known-answer tests for every mesh_* and slvs_* tool, and files that are deliberately broken and MUST be rejected. |
 
 ## When to reach for which
 
@@ -156,7 +170,24 @@ equation, so it is not the one-equation constraint it looks like.
 `AddEntity` records can be omitted entirely and `Group.remap` can be `{}` --
 SolveSpace rebuilds both on load.
 
-**Text** (`Sketch.text()`; `mtg-deck-boxes/cad/text_fit.py` for fitting it):
+**Spheres, domes and dimples** (`Sketch.lathe()`): an extrude cannot make a
+curved cap (its ends are flat), but a lathe of a closed profile can. Revolve the
+*hemisphere* -- centre, apex on the axis, and a point on the equator -- rather
+than the bare cap, so the flat face lands inside solid material (or in empty
+space for a cut) and no face is coincident with the part's. A profile edge on
+the axis prints `Vector::WithMagnitude(1) of zero vector!` per lathe; it is
+noise. Worked example: `mtg-deck-boxes/cad/build_ugp100.py` `snap_caps()`.
+
+**Checking a rebuild for what it *lacks*.** Every check that compares the
+rebuild with its source walks what the rebuild already has, so none can find a
+feature left out -- four snap domes were missing through four revisions with
+every check green. `mtg-deck-boxes/cad/audit_missing.py` samples the source
+densely, measures each point's distance to the rebuild, subtracts regions that
+are recorded decisions, and reports what is left; its `--prove` mode leaves the
+features out again and requires the audit to find them. Reusable for any
+rebuild from a source mesh; the zones are the part-specific bit.
+
+**Text** (`Sketch.text()`; `slvs_text.py` for fitting it):
 a TrueType text request has only **two free points** -- top-left and
 bottom-left, whose separation is the cap height. The right-hand corners are
 pinned to them by four equations of their own, so the group wants four
@@ -172,7 +203,7 @@ the file has your font. **A character the font lacks does not fail either**:
 FreeType prints `CID-to-GID mapping ... failed` on stderr, SolveSpace uses the
 character code as a glyph index, and a mesh comes out containing some unrelated
 glyph (`A☃B` exports fine). That message is the only signal, so scrape it
-(`mtg-deck-boxes/cad/text_fit.py` does) and refuse.
+(`slvs_text.py` does) and refuse.
 
 And one that will waste your time in git rather than in CAD:
 `solvespace-cli export-mesh` is **nondeterministic**. Three runs over an
@@ -186,6 +217,57 @@ exported from it is not.
 one, because no derived quantity detects it: area, radii, component counts
 and width distributions are all identical under a mirror and all agree with
 each other while the part is upside down.
+
+### Reverse-engineering a part, and rebuilding it in SolveSpace
+
+The workflow these tools came from, in the order the questions arise. The worked
+example is `mtg-deck-boxes/` and its spec; each entry says what failed first.
+
+**"What are this mesh's dimensions, really?"** -> `mesh_planes.py --axis` for wall
+positions, `mesh_rays.py` for thicknesses, `mesh_section.py` for profiles. Look for
+numbers that are ugly *together* and round when divided by a common factor: the
+Ultra Guard Pro's 4.1176 and 4.7812 walls were a 4.0 wall scaled by 1.0294 and
+1.1953. Plane grouping with a reference normal measures every offset *along that
+normal*; that is deliberate, and measuring each along its own normal moves a seam
+face by 0.0002 mm.
+
+**"Did my rebuild leave anything out?"** -> `mesh_compare.py`, not a face-by-face
+check. A comparison that walks what the rebuild HAS cannot find what it lacks: four
+snap domes were missing through four revisions with every check green, because a
+dome is hundreds of tiny non-planar facets that no planar comparison sees. Give
+`compare` an `explain` callback for the departures you chose, so what is left is
+what nobody decided -- and prove it by leaving a feature out and requiring the
+tool to find it (`mtg-deck-boxes/cad/audit_missing.py --prove`).
+
+**"There is a bump or dimple. How big, where, what shape?"** -> `mesh_features.py`.
+Centre it by the **bounding box of its outline, never the mean of its vertices**:
+the mean put dimples 0.13 mm out and was reported before it was caught. A sphere
+fit on a coarse mesh is only as good as its `rms`.
+
+**"Do these two parts collide?"** -> `mesh_rays.max_overlap` over a grid of columns
+with an *untidy* offset (a column on a corner round's tangent line reads a
+sliver that is not there). The number is a LENGTH ALONG THE RAY, not a depth: a
+thin sliver 0.7 mm tall reports 0.7. Section it before believing it -- a source
+part that appeared to interfere by 0.73 mm turned out to squeeze its mate by
+about 0.1 mm. And do a **control**: the same test on a part you KNOW collides must
+report it, or "clear" means nothing.
+
+**"I generated a .slvs. Is it right?"** -> `slvs_check.py`, then open it in the
+GUI once. The three checks are not redundant: SolveSpace silently deletes
+constraints that refer to nothing (the mesh does not change), and it uses saved
+parameter values only as a starting guess, so a rank-deficient sketch exports a
+perfect mesh and survives `regenerate`. Only the jitter test, or the GUI, says
+"unsolvable". `slvs_write.dof_report` is the same question asked without
+SolveSpace.
+
+**"The GUI says c039-pts-coincident is unsolvable."** -> `slvs_info.py FILE
+--constraint c039`. The handle alone says nothing about where; four of them turned
+out to be one group.
+
+**"I changed one of these tools."** -> `python3 selftest.py`. Every check in this
+repo has, at some point, been wrong in a way that passed; the cure each time was to
+run it on something whose answer is known and, for a checker, on something broken
+that it must reject. That file does both.
 
 ## Background: the mistakes these encode
 
@@ -241,6 +323,16 @@ skimming this table:
   plate orientation in four coasters (this one lies in YZ, not XZ) -- and
   the first that was right on the first attempt, because `orientation_iou()`
   scores all four variants in one call instead of being re-derived by hand.
+
+- **`mtg-deck-boxes/ultra_guard_pro_100_spec.md` sections 6.1-6.10** -- the first
+  part rebuilt in SolveSpace from a source mesh, and the origin of the `slvs_*` and
+  newer `mesh_*` tools. 6.1: a skewed extrude builds the right solid and then fails
+  the boolean. 6.2: a request handle where an entity handle belongs silently deletes
+  constraints and leaves the mesh untouched. 6.7: a file that exported perfectly and
+  still opened with "unsolvable constraints" -- seeded parameters hide a
+  rank-deficient sketch. 6.8: text, and the font that does not fall back. 6.10:
+  four snap domes missing through four revisions with every check green, because
+  each check compared what the rebuild had; the audit, and proving it can fail.
 
 The short version of the C4 lesson, since it's the one most likely to repeat
 if not internalized: **when your own derived reasoning (math, a re-run

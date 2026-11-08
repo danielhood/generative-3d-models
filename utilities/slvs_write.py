@@ -19,7 +19,7 @@ import math
 MAGIC = b"\xb1\xb2\xb3SolveSpaceREVa\n\n"
 
 # Group.type
-DRAWING_3D, DRAWING_WORKPLANE, EXTRUDE = 5000, 5001, 5100
+DRAWING_3D, DRAWING_WORKPLANE, EXTRUDE, LATHE = 5000, 5001, 5100, 5101
 # Group.subtype
 WORKPLANE_BY_POINT_ORTHO = 6000
 ONE_SIDED, TWO_SIDED = 7000, 7001
@@ -213,6 +213,35 @@ class Sketch:
         self._extrude_groups.append(g)
         return g
 
+    def lathe(self, name, sketch_group, axis_line, axis_point, combine=UNION,
+              color="00646464", visible=True):
+        """Revolve a closed sketch 360 degrees about `axis_line`.
+
+        `axis_line` is a line entity in the sketch -- usually one of the
+        profile's own edges -- and `axis_point` a point on it (SolveSpace takes
+        the line's first end).  A lathe has no parameters of its own: unlike an
+        extrude there is no length to carry, which is what makes it a clean way
+        to get a sphere or a spherical cap, neither of which an extrude can
+        make.  Group::Generate / MakeFromRevolutionOf.
+        """
+        g = self.next_group; self.next_group += 1
+        self.group_names[g] = name
+        self._rec("AddGroup", [
+            ("Group.h.v", self.x(g)),
+            ("Group.type", LATHE),
+            ("Group.order", g - 1),
+            ("Group.name", name),
+            ("Group.opA.v", self.x(sketch_group)),
+            ("Group.predef.origin.v", self.x(axis_point)),
+            ("Group.predef.entityB.v", self.x(axis_line)),
+            ("Group.color", color),
+            ("Group.meshCombine", combine),
+            ("Group.visible", 1 if visible else 0),
+            ("Group.scale", self.f(1.0)),
+            ("Group.remap", "{\n}"),
+        ])
+        return g
+
     # ---------- requests ----------
     def _request(self, rtype, group, workplane, pts, construction=False, extra=()):
         r = self.next_request; self.next_request += 1
@@ -267,7 +296,7 @@ class Sketch:
         degrees of freedom.
 
         `aspect` must be the font's true advance-width/cap-height ratio for
-        this string -- text_fit.measure() gets it from SolveSpace itself --
+        this string -- slvs_text.measure() gets it from SolveSpace itself --
         because a wrong seed leaves points 2/3 off their equations.
         """
         ox, oy = bot_left
