@@ -52,10 +52,35 @@ GROOVE_HX, GROOVE_HY = LIP_HX + CLEAR_X, LIP_HY + CLEAR_Y
 MOUTH_CHAMFER = B.MOUTH_CHAMFER
 CHAMFER_OVER = B.CHAMFER_OVER
 
-# the print bed
+# ---- the finger ledge -----------------------------------------------------
+# A shelf on the FRONT (-y) of each half, to hook fingertips on when the case is too
+# wide for one hand to grip across: the lid's is flush with the top of the lid (lift
+# from underneath), the tray's flush with the bottom of the tray (press down on top).
+# In plan view it is a flat front LEDGE_OUT proud of the wall, running out into two
+# tangent arcs that fade to nothing where they meet the wall.  Its width at the wall
+# is LEDGE_SPAN_FRAC of the front.  The flat's width comes from the shape first
+# proposed: one arc of sagitta LEDGE_ARC_SAG over that span, clipped flat at
+# LEDGE_OUT; the corners where it would meet the clip are then rounded by replacing
+# the cut-off arc with two arcs tangent to the flat, so there is no corner to catch.
+LEDGE_OUT = 3.0                      # how far it stands proud of the front wall
+LEDGE_H = 2.0                        # how thick it is (z)
+LEDGE_SPAN_FRAC = 2.0 / 3.0          # of the case's width, measured at the wall
+LEDGE_ARC_SAG = 6.0                  # the underlying arc's height; sets the flat's width (4.0 at 2 mm out,
+                                     # 6.0 at 3 mm keeps the flat about 106 wide)
+LEDGE_OVERLAP = 1.0                  # how far its profile runs into the wall, to join it
+
+LEDGE_HX = LEDGE_SPAN_FRAC * EXT_HX                      # half the span, at the wall
+_R0 = (LEDGE_HX ** 2 + LEDGE_ARC_SAG ** 2) / (2.0 * LEDGE_ARC_SAG)
+LEDGE_FLAT_HX = ((_R0 ** 2) - (_R0 - LEDGE_ARC_SAG + LEDGE_OUT) ** 2) ** 0.5   # half the flat
+# each flank: an arc tangent to the flat that drops LEDGE_OUT over the remaining width
+LEDGE_FLANK_R = ((LEDGE_HX - LEDGE_FLAT_HX) ** 2 + LEDGE_OUT ** 2) / (2.0 * LEDGE_OUT)
+assert LEDGE_OUT < LEDGE_ARC_SAG, "the clip must cut the arc, not lie beyond it"
+assert LEDGE_HX < EXT_HX - EXT_CORNER_R, "the ledge must stay on the front's straight part"
+
+# the print bed: the ledge adds to the case's depth (y) and nothing to its width
 BED = 250.0
-assert 2 * EXT_HX < BED and 2 * EXT_HY < BED, (
-    "the case is %.2f x %.2f mm; the bed is %.0f" % (2 * EXT_HX, 2 * EXT_HY, BED))
+assert 2 * EXT_HX < BED and 2 * EXT_HY + LEDGE_OUT < BED, (
+    "the case is %.2f x %.2f mm; the bed is %.0f" % (2 * EXT_HX, 2 * EXT_HY + LEDGE_OUT, BED))
 
 # ---- heights --------------------------------------------------------------
 # The brief: the tray is as tall as the back (tall) edge of the single box's

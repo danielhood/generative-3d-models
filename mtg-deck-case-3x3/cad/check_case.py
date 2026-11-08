@@ -17,6 +17,9 @@ parameters, against each requirement in turn:
   7. snap: 12 domes and 12 dimples, on all four sides, one per slot, as designed
   8. assembly: the pair interferes nowhere, the domes seat in the dimples with the
      single box's clearance, and a lid WITHOUT dimples is caught (the control)
+  9. the finger ledge on the front of each half: its outline, its thickness, its
+     position flush with the bottom / top, and nothing else out there; a half
+     built WITHOUT it is caught (the control)
 
 Each check is written so that the error it exists to catch would fail it; the
 `utilities/selftest.py` file shows the tools themselves can fail.  Exit status 0
@@ -82,6 +85,49 @@ def runs(spans):
     solid = [hi - lo for lo, hi in spans]
     gap = [spans[i + 1][0] - spans[i][1] for i in range(len(spans) - 1)]
     return solid, gap
+
+
+def ledge_front(x):
+    """Where the front face of a half should be at x, off the design: the flat, then a
+    flank arc tangent to it, then the bare wall."""
+    ax = abs(x)
+    if ax <= C.LEDGE_FLAT_HX:
+        return -C.EXT_HY - C.LEDGE_OUT
+    if ax >= C.LEDGE_HX:
+        return -C.EXT_HY
+    yc = -C.EXT_HY - C.LEDGE_OUT + C.LEDGE_FLANK_R
+    return yc - (C.LEDGE_FLANK_R ** 2 - (ax - C.LEDGE_FLAT_HX) ** 2) ** 0.5
+
+
+def ledge_problems(tris, z0, z1, label):
+    """Everything wrong with the finger ledge on a half whose ledge spans z0..z1
+    (z0 < z1).  Measured off the mesh, so an absent ledge reports a problem for each
+    thing it should have: that is what the control relies on."""
+    bad = []
+    zm = (z0 + z1) / 2.0
+    lo, hi = bbox(tris)
+    if abs(lo[1] - (-C.EXT_HY - C.LEDGE_OUT)) > 0.01:
+        bad.append("%s: frontmost point y = %.4f, want %.4f" % (label, lo[1], -C.EXT_HY - C.LEDGE_OUT))
+    # the front face along x, mid-thickness: flat, then the flanks, then the wall
+    xs = [0.0, 20.0, C.LEDGE_FLAT_HX - 0.4, C.LEDGE_FLAT_HX + 0.4, C.LEDGE_FLAT_HX + 8.0,
+          C.LEDGE_FLAT_HX + 16.0, C.LEDGE_HX - 3.0, C.LEDGE_HX + 2.0, C.LEDGE_HX + 20.0]
+    for x in xs + [-v for v in xs[1:]]:
+        sp = axis_spans(tris, 1, x + 0.0137, zm)       # untidy offset: see mesh_rays
+        want = ledge_front(x + 0.0137)
+        if not sp or abs(sp[0][0] - want) > 0.03:
+            bad.append("%s: front face at x=%+.2f is y=%s, want %.4f"
+                       % (label, x, "%.4f" % sp[0][0] if sp else "absent", want))
+    # its thickness and its flush face: one solid run over exactly z0..z1, out in front
+    for x in (0.0, 30.0, -45.0):
+        sp = axis_spans(tris, 2, x + 0.0137, -C.EXT_HY - C.LEDGE_OUT / 2.0)
+        if len(sp) != 1 or abs(sp[0][0] - z0) > TOL or abs(sp[0][1] - z1) > TOL:
+            bad.append("%s: through the ledge at x=%+.1f, solid z = %s, want %.4f..%.4f"
+                       % (label, x, [(round(a, 4), round(b, 4)) for a, b in sp], z0, z1))
+    # nothing else stands out in front of the wall, off the ends of the ledge
+    for x in (C.LEDGE_HX + 6.0, -C.LEDGE_HX - 6.0, 100.0, -100.0):
+        if axis_spans(tris, 2, x, -C.EXT_HY - 0.3):
+            bad.append("%s: something stands proud of the wall at x=%+.1f" % (label, x))
+    return bad
 
 
 def near(a, b, tol=TOL):
@@ -369,6 +415,35 @@ def main():
     wb = max(overlap(a, b) for a, b in zip(sts, bls))
     (ok if wb > 0.5 * C.BUMP_H else fail)(
         "control: the same tray against a lid WITHOUT dimples overlaps by %.4f mm (the test can fail)" % wb)
+
+    print()
+    print("=" * 72)
+    print("9. the finger ledge")
+    print("=" * 72)
+    for name, t, z0, z1 in (("tray", tray, 0.0, C.LEDGE_H),
+                            ("lid", lid, C.H_TOTAL - C.LEDGE_H, C.H_TOTAL)):
+        bad = ledge_problems(t, z0, z1, name)
+        for m in bad:
+            fail(m)
+        if not bad:
+            ok("%s: ledge %.1f proud, %.1f thick, flush with the %s (z = %.2f..%.2f); flat %.2f wide, "
+               "%.2f at the wall; front face matches the design at 17 stations"
+               % (name, C.LEDGE_OUT, C.LEDGE_H, "bottom" if name == "tray" else "top", z0, z1,
+                  2 * C.LEDGE_FLAT_HX, 2 * C.LEDGE_HX))
+    # nothing else is affected: the ledges clear the other half and the snap
+    lo, hi = bbox(lid)
+    tlo, thi = bbox(tray)
+    (ok if thi[2] < C.H_TOTAL - C.LEDGE_H else fail)(
+        "the tray's top (z=%.2f) is below the lid's ledge (z=%.2f): the two never meet"
+        % (thi[2], C.H_TOTAL - C.LEDGE_H))
+    # the control: halves built WITHOUT the ledge must be caught by the same test
+    for name, S, z0, z1 in (("tray", builder.build_bottom(ledge=False), 0.0, C.LEDGE_H),
+                            ("lid", builder.build_top(ledge=False), C.H_TOTAL - C.LEDGE_H, C.H_TOTAL)):
+        t = export(S, name + "-noledge")
+        bad = ledge_problems(t, z0, z1, name)
+        (ok if len(bad) >= 5 else fail)(
+            "control: the %s built WITHOUT the ledge fails the test %d ways (the test can fail)"
+            % (name, len(bad)))
 
     print()
     print("=" * 72)

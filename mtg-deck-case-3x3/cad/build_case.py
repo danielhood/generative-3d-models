@@ -31,6 +31,8 @@ sys.path.insert(0, os.path.join(HERE, "..", "..", "utilities"))
 sys.path.insert(0, HERE)
 
 from slvs_write import (Sketch, UNION, DIFFERENCE, TWO_SIDED, PT_PLANE_DISTANCE,
+                        POINTS_COINCIDENT, HORIZONTAL, VERTICAL, ARC_LINE_TANGENT,
+                        DIAMETER, EQUAL_RADIUS,
                         ENT_XY_WORKPLANE, ENT_YZ_WORKPLANE, ENT_ZX_WORKPLANE)
 from slvs_shapes import rect, rounded_rect, rect_at, datums, spherical_cap, corner_wedge
 import case_params as C
@@ -84,6 +86,65 @@ def snap_caps(S, kind):
 
 
 # --------------------------------------------------------------------------
+# the finger ledge
+# --------------------------------------------------------------------------
+def finger_ledge(S, name, pt_face, up):
+    """The shelf on the front of one half: its plan-view outline sketched on the
+    half's end face (`pt_face`, a datum on that plane) and pushed LEDGE_H into the
+    part (`up` for the tray, whose end face is its underside; down for the lid).
+
+    The outline, counter-clockwise, front edge at the bottom:  in from the wall along
+    the left; an arc tangent to the flat; the flat, LEDGE_OUT proud of the wall; a
+    mirror arc; back along the right; and a closing line LEDGE_OVERLAP inside the
+    wall so the extrude joins the part by overlap, not by sharing a face.  28
+    unknowns, 28 equations (the arcs carry one each):
+
+        6 joints, 2 coordinates each                         12
+        flat horizontal, the sides vertical, the top
+        horizontal                                            4
+        the flat's two ends on x = +-LEDGE_FLAT_HX, its
+        height on y; the arcs' wall ends on the wall's y;
+        the top's y                                           6
+        each arc tangent to the flat                          2
+        one arc's radius, the other equal to it               2
+        the arcs' own equal-distance equation                 2
+    """
+    xe, xf = C.LEDGE_HX, C.LEDGE_FLAT_HX
+    yw = -C.EXT_HY                                   # the front wall
+    yf = yw - C.LEDGE_OUT                            # the flat
+    yin = yw + C.LEDGE_OVERLAP                       # inside the wall
+    rf = C.LEDGE_FLANK_R
+    yc = yf + rf                                     # both flank arcs' centres' y
+    g, wp = S.workplane_group(name + "-profile", pt_face, XY_U, XY_V, visible=False)
+    left = S.line(g, wp, (-xe, yin), (-xe, yw))
+    flat = S.line(g, wp, (-xf, yf), (xf, yf))
+    right = S.line(g, wp, (xe, yw), (xe, yin))
+    top = S.line(g, wp, (xe, yin), (-xe, yin))
+    a1 = S.arc(g, wp, (-xf, yc), (-xe, yw), (-xf, yf))    # counter-clockwise: wall to flat
+    a2 = S.arc(g, wp, (xf, yc), (xf, yf), (xe, yw))       # counter-clockwise: flat to wall
+    # entities are (ent, A, B) for a line, (ent, centre, start, end) for an arc
+    for p, q in ((left[2], a1[2]), (a1[3], flat[1]), (flat[2], a2[2]),
+                 (a2[3], right[1]), (right[2], top[1]), (top[2], left[1])):
+        S.constraint(POINTS_COINCIDENT, g, wp, ptA=p, ptB=q)
+    S.constraint(HORIZONTAL, g, wp, entityA=flat[0])
+    S.constraint(VERTICAL, g, wp, entityA=left[0])
+    S.constraint(VERTICAL, g, wp, entityA=right[0])
+    S.constraint(HORIZONTAL, g, wp, entityA=top[0])
+    S.constraint(ARC_LINE_TANGENT, g, wp, entityA=a1[0], entityB=flat[0], other=True)
+    S.constraint(ARC_LINE_TANGENT, g, wp, entityA=a2[0], entityB=flat[0], other=False)
+    S.constraint(DIAMETER, g, wp, valA=2 * rf, entityA=a1[0], other=True,
+                 disp=(-xf, yc, 0.0))
+    S.constraint(EQUAL_RADIUS, g, wp, entityA=a1[0], entityB=a2[0])
+    # the sketch's origin is the case's axis (the datum is at x = y = 0), so (u, v)
+    # are world (x, y) and the pins read as the plain numbers they are
+    for pt, val, plane in ((flat[1], -xf, ENT_YZ_WORKPLANE), (flat[2], xf, ENT_YZ_WORKPLANE),
+                           (flat[1], yf, ENT_ZX_WORKPLANE), (left[2], yw, ENT_ZX_WORKPLANE),
+                           (right[1], yw, ENT_ZX_WORKPLANE), (top[2], yin, ENT_ZX_WORKPLANE)):
+        S.constraint(PT_PLANE_DISTANCE, g, wp, valA=val, ptA=pt, entityA=plane)
+    _extrude_from(S, name, g, C.LEDGE_H, UNION, up=up)
+
+
+# --------------------------------------------------------------------------
 # the lid's mouth bevel
 # --------------------------------------------------------------------------
 def mouth_chamfer(S, pt_seam):
@@ -126,18 +187,23 @@ def mouth_chamfer(S, pt_seam):
 # --------------------------------------------------------------------------
 # the tray
 # --------------------------------------------------------------------------
-def build_bottom(bumps=True):
-    """bumps=False leaves out the snap domes, for the verification's controls."""
+def build_bottom(bumps=True, ledge=True):
+    """bumps=False leaves out the snap domes, ledge=False the finger ledge: for the
+    verification's controls."""
     S = Sketch()
-    pt_seam, pt_lip, pt_floor, pt_div = datums(S, [(0.0, 0.0, C.Z_S), (0.0, 0.0, C.Z_LIP),
-                                                   (0.0, 0.0, C.FLOOR_T),
-                                                   (0.0, 0.0, C.DIV_TRAY_TOP)])
+    pt_seam, pt_lip, pt_floor, pt_div, pt_base = datums(
+        S, [(0.0, 0.0, C.Z_S), (0.0, 0.0, C.Z_LIP), (0.0, 0.0, C.FLOOR_T),
+            (0.0, 0.0, C.DIV_TRAY_TOP), (0.0, 0.0, 0.0)])
 
     # 1. the outer walls, sketched on the seam plane and pushed down to the floor's
     #    underside: so the one plane that mates with the lid is the dimensioned one
     g, wp = S.workplane_group("outer-profile", pt_seam, XY_U, XY_V, visible=False)
     rounded_rect(S, g, wp, C.EXT_HX, C.EXT_HY, C.EXT_CORNER_R)
     _extrude_from(S, "outer-block", g, C.Z_S, UNION, up=False)
+
+    # 1b. the finger ledge, flush with the underside, so the tray stands on it
+    if ledge:
+        finger_ledge(S, "ledge", pt_base, up=True)
 
     # 2. the lip: the same outline as the single box's, sketched on the lip-top plane
     #    and pushed down into the walls (to 1 mm up, not to the floor's underside, so
@@ -173,18 +239,22 @@ def build_bottom(bumps=True):
 # --------------------------------------------------------------------------
 # the lid
 # --------------------------------------------------------------------------
-def build_top(dimples=True):
-    """dimples=False builds a lid without the snap dimples, which the verification
-    uses to prove its engagement test can fail."""
+def build_top(dimples=True, ledge=True):
+    """dimples=False builds a lid without the snap dimples, ledge=False one without
+    the finger ledge: the verification uses both to prove its tests can fail."""
     S = Sketch()
-    pt_seam, pt_lip, pt_ceil, pt_div = datums(S, [(0.0, 0.0, C.Z_S), (0.0, 0.0, C.Z_LIP),
-                                                  (0.0, 0.0, C.Z_CEIL),
-                                                  (0.0, 0.0, C.DIV_LID_BOTTOM)])
+    pt_seam, pt_lip, pt_ceil, pt_div, pt_top = datums(
+        S, [(0.0, 0.0, C.Z_S), (0.0, 0.0, C.Z_LIP), (0.0, 0.0, C.Z_CEIL),
+            (0.0, 0.0, C.DIV_LID_BOTTOM), (0.0, 0.0, C.H_TOTAL)])
 
     # 1. the outer block, sketched on the seam and pushed UP to the roof of the lid
     g, wp = S.workplane_group("outer-profile", pt_seam, XY_U, XY_V, visible=False)
     rounded_rect(S, g, wp, C.EXT_HX, C.EXT_HY, C.EXT_CORNER_R)
     _extrude_from(S, "outer-block", g, C.LID_H, UNION, up=True)
+
+    # 1b. the finger ledge, flush with the top
+    if ledge:
+        finger_ledge(S, "ledge", pt_top, up=False)
 
     # 2. the cavity, down from the ceiling and out through the open bottom
     g, wp = S.workplane_group("cavity-profile", pt_ceil, XY_U, XY_V, visible=False)
