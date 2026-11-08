@@ -33,7 +33,7 @@ still came up with "unsolvable constraint" messages there.
 
 | | |
 |---|---|
-| exterior | 224.23 x 248.06 mm including the 3 mm finger ledge on the front (bed limit 250 x 250; `case_params.py` asserts it) |
+| exterior | 221.43 x 245.26 mm including the 3 mm finger ledge on the front (bed limit 250 x 250; `case_params.py` asserts it) |
 | tray | 73.55 tall: floor 4.0, walls to z = 67.55, lip to 73.55 |
 | lid | 34.50 tall (z = 67.55 .. 102.05) |
 | card space | 94.05 in every slot, as in the single box |
@@ -66,7 +66,7 @@ case too; to change it for the case alone, assign a number here instead.
 | Variable | Value | Controls |
 |---|---|---|
 | `N_COLS`, `N_ROWS` | 3, 3 | number of slots across x and along y. Everything else, the snap positions and the dividers included, follows. The `BED` assert stops a grid that does not fit |
-| `INNER_T` | 3.0 | divider thickness |
+| `INNER_T` | 1.6 | divider thickness, tray and lid: four 0.4 mm extrusion widths, so the slicer fills it with four lines (3.0 until rev D, briefly 1.5). Keep it a multiple of your extrusion width. The slots do not change with it, so the case's size does: each 0.5 mm of divider moves the case by 1 mm each way |
 | `SLOT_X`, `SLOT_Y` | imported | one slot's size, the single box's cavity. The critical dimensions for the cards |
 | `PITCH_X`, `PITCH_Y` | derived | slot centre to slot centre: slot plus one divider |
 | `IN_HX`, `IN_HY` | derived | half the interior of the whole case |
@@ -118,27 +118,53 @@ case too; to change it for the case alone, assign a number here instead.
 
 | Variable | Value | Controls |
 |---|---|---|
-| `LEDGE_OUT` | 3.0 | how far it stands proud of the front wall. The footprint's depth limit: the case is 245.06 deep, so this can reach about 4.9 before the bed is full (the assert stops it); at 3.0 there is 1.94 mm left. Raising it also needs `LEDGE_ARC_SAG` raised to keep the flat as wide |
+| `LEDGE_OUT` | 3.0 | how far it stands proud of the front wall. The footprint's depth limit: the case is 242.26 deep, so this can reach about 7.7 before the bed is full (the assert stops it); at 3.0 there is 4.74 mm left. Raising it also needs `LEDGE_ARC_SAG` raised to keep the flat as wide |
 | `LEDGE_H` | 2.0 | its thickness, in z |
-| `LEDGE_SPAN_FRAC` | 2/3 | its width at the wall, as a fraction of the case's width (149.49 mm) |
+| `LEDGE_SPAN_FRAC` | 2/3 | its width at the wall, as a fraction of the case's width (147.62 mm) |
 | `LEDGE_ARC_SAG` | 6.0 | the height of the arc the shape is cut from. Sets how wide the flat front is: a larger value gives a wider flat and steeper ends. Must exceed `LEDGE_OUT` |
 | `LEDGE_HX` | derived | half the span, at the wall (74.74) |
-| `LEDGE_FLAT_HX` | derived | half the flat front (52.94) |
-| `LEDGE_FLANK_R` | derived | the radius of the two arcs that run from the flat out to the wall, each tangent to the flat (80.8). This is the corner rounding |
+| `LEDGE_FLAT_HX` | derived | half the flat front (52.28) |
+| `LEDGE_FLANK_R` | derived | the radius of the two arcs that run from the flat out to the wall, each tangent to the flat (78.8). This is the corner rounding |
 | `LEDGE_OVERLAP` | 1.0 | how far the profile runs into the wall so it joins by overlap |
 
 `OVER` (2.0) is how far a cutter reaches past a part where it does not matter.
 
 ## Print status
 
-**First print complete, PLA, 2026-11-08 (before the finger ledges were added):** the lid locks "perfectly", neither
+**First print complete, PLA, 2026-11-08 (before the finger ledges and the thinner dividers):** the lid locks "perfectly", neither
 too tight nor too loose, with the same feel as prints of the single box's
 original STLs (printed in both PLA and PETG). Original-STL and rebuilt
 single-box halves also interchange: an original top on a new bottom, and the
 reverse, both fit. So the 12-dome snap, the main risk recorded in the spec, did
 not turn out to be a problem, and the front/back snap being slightly looser by
 design (0.092 mm against 0.025 mm; spec section 5) was not reported as a problem.
-PETG has not been tried for the case. **The finger ledges are not printed yet.**
+PETG has not been tried for the case. **The finger ledges and the 1.6 mm dividers are not printed yet.**
+
+## Printing
+
+Suggestions that follow from the geometry. **None has been tried**: the one print so
+far was before the ledges and the 1.6 mm dividers, and the printer, slicer and nozzle
+are not known to this repo.
+
+* **Orientation.** Print each half on the face the ledge is flush with, as modelled:
+  the tray as it stands, the lid **upside down** (ceiling on the bed, groove opening
+  upward). Then each ledge is a plain 2 mm plate on the bed and neither half needs
+  support for it. The domes and dimples are the single box's; what orientation you
+  printed that in is not recorded here, so slice them and look at the overhangs.
+* **Bed.** The case is 221.43 x 245.26 mm. Put the 245 mm side along the bed's long
+  axis; it leaves about 2.4 mm each side of a 250 mm bed, so **a brim will not fit** and
+  a skirt may be refused. Check the slicer's usable area (it is often smaller than the
+  nominal bed) before slicing, and use no brim and a skirt with zero distance, or none.
+  The diagonal is far too long to rotate.
+* **Dividers.** 1.6 mm is four lines at a 0.4 mm line width. Slice with exactly that
+  width (a 0.42 mm line makes 3.8 lines and a gap-fill or a missing line); with a
+  different nozzle, change `INNER_T` to a multiple of its line width and rebuild.
+* **A big flat first layer** (221 x 245 mm) is the usual place PLA lifts: a clean,
+  warm bed matters more here than anywhere on the single box.
+* **What to look at first:** whether the lid starts on and closes with a click; the
+  force to open it (12 domes, section 7 of the spec); whether the ledges are enough to
+  open it by (3 mm may be more or less than needed, `LEDGE_OUT`); and how stiff the lid's
+  dividers are, which hang 24 mm from the ceiling with a free lower edge.
 
 ## Verification
 
@@ -148,7 +174,9 @@ walls, lip, clearances, heights and dividers against the figures above; all 12
 domes and 12 dimples measured to their parameters, with no extras; the pair
 overlapping nowhere over about 2,900 sampled columns; and a control, a lid built
 without dimples, which must (and does) overlap by 2.54 mm so the engagement
-test is known to be able to fail. `../utilities/slvs_check.py` additionally
+test is known to be able to fail. The last section checks that the committed `.stl` files, which
+are what gets printed, are the current design: one watertight shell, the same size and volume as a fresh export of
+the `.slvs` (so a stale STL from an earlier revision fails), with a control that must fail. `../utilities/slvs_check.py` additionally
 checks that the constraints survive a reload and a perturbation.
 
 `solvespace-cli export-mesh` is not reproducible: it gives different

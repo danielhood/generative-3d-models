@@ -20,6 +20,9 @@ parameters, against each requirement in turn:
   9. the finger ledge on the front of each half: its outline, its thickness, its
      position flush with the bottom / top, and nothing else out there; a half
      built WITHOUT it is caught (the control)
+ 10. the committed STL files, the ones that get printed, are the current design:
+     watertight, one shell, and the same size and volume as a fresh export of the
+     .slvs; the same test refuses the tray's STL as the lid's (the control)
 
 Each check is written so that the error it exists to catch would fail it; the
 `utilities/selftest.py` file shows the tools themselves can fail.  Exit status 0
@@ -444,6 +447,44 @@ def main():
         (ok if len(bad) >= 5 else fail)(
             "control: the %s built WITHOUT the ledge fails the test %d ways (the test can fail)"
             % (name, len(bad)))
+
+    print()
+    print("=" * 72)
+    print("10. the committed STL files are the current design")
+    print("=" * 72)
+    print("  `solvespace-cli export-mesh` is not reproducible, so the files are compared by")
+    print("  size and volume to a fresh export, not triangle by triangle.")
+
+    def stl_matches(path, fresh):
+        """Problems with a committed STL against a fresh export of the same part."""
+        if not os.path.exists(path):
+            return ["%s does not exist" % os.path.basename(path)]
+        t = load_stl(path)
+        h, hf = health(t, "stl"), health(fresh, "fresh")
+        bad = []
+        if h["non_manifold_edges"] or not h["winding_consistent"] or h["shells"] != 1:
+            bad.append("not one watertight shell")
+        (a0, a1), (b0, b1) = bbox(t), bbox(fresh)
+        for k, ax in enumerate("xyz"):
+            if abs((a1[k] - a0[k]) - (b1[k] - b0[k])) > 0.02 or abs(a0[k] - b0[k]) > 0.02:
+                bad.append("%s extent %.3f..%.3f, fresh export %.3f..%.3f" % (ax, a0[k], a1[k], b0[k], b1[k]))
+        if abs(h["volume"] - hf["volume"]) > 5e-4 * hf["volume"]:
+            bad.append("volume %.0f, fresh export %.0f mm^3" % (h["volume"], hf["volume"]))
+        return bad
+
+    stl_tray = os.path.join(PART, "deck_case_3x3_bottom.stl")
+    stl_lid = os.path.join(PART, "deck_case_3x3_top.stl")
+    for name, path, fresh in (("tray", stl_tray, tray), ("lid", stl_lid, lid)):
+        bad = stl_matches(path, fresh)
+        for m in bad:
+            fail("%s STL: %s" % (name, m))
+        if not bad:
+            lo, hi = bbox(load_stl(path))
+            ok("%s STL: %s, %.3f x %.3f x %.3f mm, as a fresh export of the .slvs"
+               % (name, os.path.basename(path), hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]))
+    wrong = stl_matches(stl_tray, lid)
+    (ok if len(wrong) >= 2 else fail)(
+        "control: the tray's STL checked as if it were the lid's fails %d ways (the test can fail)" % len(wrong))
 
     print()
     print("=" * 72)

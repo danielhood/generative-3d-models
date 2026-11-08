@@ -27,7 +27,7 @@ import ugp100_params as B            # B for "the single Box"
 # ---- the grid -------------------------------------------------------------
 N_COLS = 3                           # slots across x
 N_ROWS = 3                           # slots along y
-INNER_T = 3.0                        # divider thickness; the brief says 3 mm is enough
+INNER_T = 1.6                        # divider thickness: 4 x a 0.4 mm extrusion width (3.0 in rev A-C, 1.5 in rev D)
 
 # one slot is exactly the single box's cavity
 SLOT_X = 2 * B.INT_HX                # 69.9992
