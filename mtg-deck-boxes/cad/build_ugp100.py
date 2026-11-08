@@ -44,7 +44,8 @@ from slvs_write import (Sketch, ENT_ORIGIN, UNION, DIFFERENCE,
                         EQUAL_RADIUS, DIAMETER, ARC_LINE_TANGENT,
                         AT_MIDPOINT, ANGLE, TWO_SIDED, VERTICAL,
                         PT_IN_PLANE, PT_PLANE_DISTANCE,
-                        ENT_XY_WORKPLANE, ENT_YZ_WORKPLANE, ENT_ZX_WORKPLANE)
+                        ENT_XY_WORKPLANE, ENT_YZ_WORKPLANE, ENT_ZX_WORKPLANE,
+                        HORIZONTAL as HORIZ)
 import ugp100_params as P
 import text_fit
 
@@ -297,7 +298,78 @@ def mouth_chamfer(S, pt_seam):
                       ch=ch, over=over, pin=pin_x)
     reach = (P.GROOVE_HY + ch) / c
     S.extrude("mouth-chamfer-x-cut", g, (0.0, c * reach, sn * reach),
-              combine=DIFFERENCE, subtype=TWO_SIDED, visible=True)
+              combine=DIFFERENCE, subtype=TWO_SIDED, visible=False)
+
+
+def snap_caps(S, kind):
+    """The four spherical caps that make the snap: domes added to the bottom's
+    lip (`kind` = "bump") or dimples cut into the top's groove walls ("dimple").
+
+    A cap is a revolved quarter-disc.  The profile is a closed triangle of
+    three edges, drawn in a horizontal plane through the cap's centre with
+    u = x and v = y:
+
+        C -- the centre of the sphere, on the cap's axis, just INSIDE the face
+        A -- the apex, on the axis, `h` outside the face
+        E -- on the sphere's equator, R off the axis
+
+    with an edge C-A that is the axis, an edge C-E square to it, and an arc
+    E..A of the sphere.  Revolving that about C-A gives the cap PLUS the
+    hemisphere behind it, which sits inside the lip (or in the empty groove) --
+    a cap of the same size cut off exactly at the face would leave a boolean
+    face coincident with the lip's, and coincident faces are what these
+    booleans handle worst.
+
+    An extrude cannot do this: its end caps are flat, and the only extrude-
+    shaped bump is a flat-topped boss.
+    """
+    bump = kind == "bump"
+    xf_abs = P.LIP_HX if bump else P.GROOVE_HX      # the face the cap stands on
+    h = P.BUMP_H if bump else P.DENT_DEPTH          # apex height / depth
+    R = P.BUMP_SPHERE_R if bump else P.DENT_SPHERE_R
+    cin = R - h                                     # sphere centre, inside the face
+    combine = UNION if bump else DIFFERENCE
+
+    pts, caps = [], []
+    for sg in (-1, 1):                              # -1 = left face, +1 = right
+        for (y, z) in P.SNAP_POINTS:
+            pts.append((sg * xf_abs, y, z))
+            caps.append((sg, y, z))
+    dpts = datums(S, pts)
+
+    n_total = len(caps)
+    for i, ((sg, y, z), pt) in enumerate(zip(caps, dpts)):
+        tag = "%s-%s-%s" % (kind, "L" if sg < 0 else "R",
+                            "front" if y < 0 else "back")
+        g, wp = S.workplane_group(tag + "-profile", pt, (1.0, 0.0, 0.0),
+                                  (0.0, 1.0, 0.0), visible=False)
+        C = (-sg * cin, 0.0)                        # relative to the face point
+        A = (sg * h, 0.0)
+        E = (-sg * cin, R)
+        axis = S.line(g, wp, C, A)
+        side = S.line(g, wp, C, E)
+        # the arc runs counter-clockwise: E -> A on the left face (90 -> 180
+        # degrees about C), A -> E on the right (0 -> 90)
+        arc = S.arc(g, wp, C, E, A) if sg < 0 else S.arc(g, wp, C, A, E)
+        a_start, a_end = (arc[2], arc[3])
+        S.constraint(POINTS_COINCIDENT, g, wp, ptA=axis[1], ptB=side[1])
+        S.constraint(POINTS_COINCIDENT, g, wp, ptA=arc[1], ptB=axis[1])
+        S.constraint(POINTS_COINCIDENT, g, wp, ptA=(a_end if sg < 0 else a_start),
+                     ptB=axis[2])
+        S.constraint(POINTS_COINCIDENT, g, wp, ptA=(a_start if sg < 0 else a_end),
+                     ptB=side[2])
+        S.constraint(HORIZ, g, wp, entityA=axis[0])
+        S.constraint(VERTICAL, g, wp, entityA=side[0])
+        S.constraint(PT_PT_DISTANCE, g, wp, valA=R, ptA=side[1], ptB=side[2],
+                     disp=(-3.0 * sg, R / 2.0, 0.0))
+        # the sphere's centre is the one point that is placed: x and y against
+        # the reference planes (the sketch plane itself is z = the datum's z)
+        S.constraint(PT_PLANE_DISTANCE, g, valA=sg * xf_abs - sg * cin,
+                     ptA=axis[1], entityA=ENT_YZ_WORKPLANE)
+        S.constraint(PT_PLANE_DISTANCE, g, valA=y, ptA=axis[1],
+                     entityA=ENT_ZX_WORKPLANE)
+        S.lathe(tag, g, axis[0], axis[1], combine=combine,
+                visible=(not bump and i == n_total - 1))
 
 
 def text_pocket(S, text=None):
@@ -341,9 +413,10 @@ def text_pocket(S, text=None):
 # --------------------------------------------------------------------------
 # the bottom part
 # --------------------------------------------------------------------------
-def build_bottom(label=True, text=None):
+def build_bottom(label=True, text=None, bumps=True):
     """label=False builds the plain part, which the verification uses as the
-    baseline for what the engraving removed."""
+    baseline for what the engraving removed.  bumps=False leaves out the snap
+    domes, which audit_missing.py uses to prove it can see them gone."""
     S = Sketch()
     pt_floor, pt_seam, pt_lip = datums(S, [(0.0, 0.0, P.FLOOR_T),
                                            (0.0, 0.0, P.Z_SEAM),
@@ -372,12 +445,16 @@ def build_bottom(label=True, text=None):
     # 4. trim the lip to height
     seam_cover(S, "lip-top-cut", pt_lip, P.Z_LIP, 0.0, tall, up=True)
 
-    # 5. the engraved label, before the cavity so that the cavity -- the one
+    # 5. the snap bumps on the lip's outer faces
+    if bumps:
+        snap_caps(S, "bump")
+
+    # 6. the engraved label, before the cavity so that the cavity -- the one
     #    that has to be right -- is cut last and is what the file opens on
     if label:
         text_pocket(S, text)
 
-    # 6. and the card cavity last -- the dimension that has to be right, and
+    # 7. and the card cavity last -- the dimension that has to be right, and
     #    what turns step 3's block into a ring.  It goes last because the group
     #    the file opens on is the one whose geometry you see, and the cavity
     #    profile is the size of the part rather than the size of a cutter.
@@ -392,7 +469,9 @@ def build_bottom(label=True, text=None):
 # --------------------------------------------------------------------------
 # the top part
 # --------------------------------------------------------------------------
-def build_top():
+def build_top(dimples=True):
+    """dimples=False builds a top without the snap dimples, which the
+    verification uses to prove its engagement test can fail."""
     S = Sketch()
     pt_seam, pt_lip, pt_ceil, pt_top = datums(S, [(0.0, 0.0, P.Z_SEAM),
                                                   (0.0, 0.0, P.Z_LIP),
@@ -425,6 +504,10 @@ def build_top():
     # 5. and bevel its mouth, so the lip is funnelled in rather than having to
     #    be lined up before it will enter
     mouth_chamfer(S, pt_seam)
+
+    # 6. the dimples the bottom's snap bumps seat in
+    if dimples:
+        snap_caps(S, "dimple")
     return S
 
 

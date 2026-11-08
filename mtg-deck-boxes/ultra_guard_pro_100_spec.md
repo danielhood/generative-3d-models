@@ -5,9 +5,12 @@ Parts: `cad/build_ugp100.py` -> `ultra_guard_pro_100_bottom.slvs`,
 Source: `orig/Ultra_Guard_Pro_100+_bottom-BLANK.stl`,
 `orig/Ultra_Guard_Pro_100+_top-tight.stl`
 Verification: `cad/check_ugp100.py`
-Revision: rev C, 2026-11-07. First part in this repo built in SolveSpace
+Revision: rev E, 2026-11-07. First part in this repo built in SolveSpace
 rather than OpenSCAD. rev B added the lead-in bevel at the groove mouth (D5);
-rev C adds the engraved "MTG" label on the bottom's front face (D10).
+rev C the engraved label on the bottom's front face (D10); rev D relabelled it
+from "MTG" to "Spock" and added `cad/relabel.py` and `README.md` (6.9); rev E
+adds the four snap domes on the lip and their dimples in the top (D11), which
+the original rebuild missed.
 Status: **modelled and mesh-verified against the source STLs; not yet
 printed.**
 
@@ -54,6 +57,8 @@ Assembled: 78.234 x 86.062 x 102.05 mm exterior.
 | R7 | Each rebuilt half should still mate with the original other half | reading of R2 |
 | R8 | Watertight, single-shell, printable meshes | repo standard |
 | R9 | Engraved text on the bottom's front face, in a centred 70 x 20 mm panel, ~3 mm deep, not through the wall | rev C request |
+| R10 | Changing the label is a routine, low-risk operation with a documented procedure | rev D request |
+| R11 | The lid snaps shut: four domes on the bottom's lip seat in dimples in the top's groove | rev E request |
 
 ---
 
@@ -182,13 +187,25 @@ those are omitted, and none of them is a fit surface — verified: the
 original's groove roof meets its groove wall at a **sharp** corner, so the
 rebuild's sharp lip-top corner has somewhere to go.
 
-The original also chamfers the groove's mouth 0.4 x 0.4, and that one is not
-cosmetic: it is the lead-in that lets the top be dropped on roughly square
-rather than lined up first. rev A omitted it and the halves had to be
-presented to each other accurately. rev B puts it back at **0.6 x 0.6**
-(`MOUTH_CHAMFER`), a little more generous than the original because printed
-parts of this size do not land within a tenth. The cost is paid twice over
-and both are affordable:
+The original also relieves the groove's mouth, and that one is not cosmetic:
+it is the lead-in that lets the top be dropped on roughly square rather than
+lined up first. rev A omitted it and the halves had to be presented to each
+other accurately. rev B puts back a single 45 degree chamfer at **0.6 x 0.6**
+(`MOUTH_CHAMFER`) all round.
+
+*Correction (rev E).* This section first described the original's relief as a
+0.4 x 0.4 chamfer and mine as "a little more generous". That was only the top
+of it. In section the original is a 0.4 chamfer on the wall followed by a round
+of roughly 0.6 mm blending into the seam face, and the relief starts **1.46 mm
+up the back wall, 1.02 up each side wall and 0.50 up the front**. So the
+rebuild is about as generous as the original at the front and sides and
+**materially smaller at the back wall**. The surfaces differ by at most 0.43 mm,
+at the back wall only, and by under 0.25 mm elsewhere. It was found by the
+audit in 6.10, which is also why it is not a miss: it is a lead-in, not a fit
+surface, and the bevel as built was accepted. If the lid is hard to start at
+the back, that is the place to enlarge it.
+
+The cost of the bevel is paid twice over and both are affordable:
 
 | | before | after |
 |---|---|---|
@@ -296,6 +313,55 @@ at y = -40.0308 (3.0000 deep), the ink is centred on the panel to 0.0000 mm,
 and the volume removed equals the floor area x depth, so the cutter touched
 nothing but the label.
 
+**D11 — The snap.** The halves are held shut by **four domes on the bottom's
+lip, two on each x face (one toward the front, one toward the back), seating in
+four matching dimples in the top's groove walls.** rev A-D left them out. The
+lip is 0.012 mm inside the groove, so a dome 0.77 mm high is real interference
+while the lid slides over it: the walls flex, and the dome clicks into the
+dimple. Without them nothing but friction keeps the halves together.
+
+The clue was there from the start: the lip's outer x faces measured 419 mm^2
+against the ~477 a plain 6 mm lip would give, and I did not chase it.
+
+| | dome (bottom) | dimple (top) |
+|---|---|---|
+| shape in the source | cap of a 1.5 mm sphere, then scaled | cap of a ~1.70 mm sphere, circular |
+| size in the source | base 1.553 (y) x 1.299 (z), 0.772 high | mouth radius 1.433, 0.787 deep |
+| as rebuilt | circular cap, base radius 1.299, 0.7721 high | **exact**: mouth radius 1.433, 0.7857 deep |
+| sphere radius as rebuilt | 1.479 | 1.700 |
+| volume | 2.29 mm^3 (source 2.72) | 2.79 mm^3 |
+
+The base design's dome is a cap of a 1.5 mm sphere 0.75 high, whose base radius
+is sqrt(1.5^2 - 0.75^2) = 1.299 — that is where the odd 1.299 comes from. The
+non-uniform scale then stretches it to an ellipse, 1.553 x 1.299, 0.772 high.
+Centres, in the rebuild frame, are the same on both faces: (y, z) =
+(-31.7434, 35.2115) toward the front and (33.8296, 67.1883) toward the back.
+The source's dimples are coaxial with its domes to within 0.031 mm, so one set
+of four positions serves both.
+
+**What is different from the original, and why it matters.** SolveSpace has no
+non-uniform scale, so the dome cannot be the source's ellipse. It is a circular
+cap that keeps the two dimensions governing the click: its **height**, and its
+**base radius in z**, which sets the profile along the direction the lid slides
+(vertical). The vertical detent is therefore unchanged. What is lost is the 0.25
+mm of extra width in y each side.
+
+That width turns out not to be incidental. Sectioning the source's dome and
+dimple at matching depths (6.10) shows the dimple is **~0.1 mm narrower in y
+than the dome from the rim down to near the tip** — 1.38 vs 1.50 at the base,
+0.98 vs 1.08 mid-depth — so the source's own bottom presses into its own top's dimple flanks
+by about 0.1 mm each side. That is almost certainly an oversight (the dome was
+scaled with everything else; the dimple, made afterwards, was not), but it is a
+squeeze the original has and this rebuild does not. The rebuilt dome seats with
+the same **0.0254 mm** clearance as the source's apexes: (GROOVE_HX + DENT_DEPTH)
+- (LIP_HX + BUMP_H), measured 0.0253. A rebuilt bottom still fits the original
+top; the original bottom does not seat cleanly in a rebuilt top, exactly as it
+does not in its own.
+
+If the printed lid proves too loose, the dome can be widened in y without
+changing its height or vertical profile (two overlapping caps offset +-0.25 mm
+in y); not done, because it is a guess about a print that has not happened.
+
 ---
 
 ## 5. Verified dimensions
@@ -339,8 +405,8 @@ SolveSpace, for the reason in 6.7.
 
 | | sketch groups | largest group |
 |---|---|---|
-| bottom | 7 | `outer-profile`, 40 unknowns / 40 equations / rank 40; `text-plane`, 8 / 8 / 8 |
-| top | 7 | `outer-profile`, 40 / 40 / rank 40 |
+| bottom | 11 | `outer-profile`, 40 unknowns / 40 equations / rank 40; `text-plane`, 8 / 8 / 8; each of the four dome profiles 14 / 14 / 14 |
+| top | 11 | `outer-profile`, 40 / 40 / rank 40; each of the four dimple profiles 14 / 14 / 14 |
 
 The extrude groups carry 3 unconstrained params each (their extrusion
 vector) and the report lists them as such; see 7.3.
@@ -350,14 +416,17 @@ vector) and the report lists them as such; see 7.3.
 | | triangles | shells | watertight | volume |
 |---|---|---|---|---|
 | bottom, original | 14 350 | 1 | yes | 90 637.6 mm^3 |
-| bottom, rebuild (with label) | 760 | 1 | yes | 89 911.3 mm^3 (-0.80%) |
+| bottom, rebuild ("Spock", with domes) | 3 434 | 1 | yes | 90 178.9 mm^3 (-0.51%) |
 | top, original | 12 832 | 1 | yes | 91 094.8 mm^3 |
-| top, rebuild | 284 | 1 | yes | 91 876.9 mm^3 (+0.86%) |
+| top, rebuild (with dimples) | 1 732 | 1 | yes | 91 866.0 mm^3 (+0.85%) |
 
-Without the label the bottom is 260 triangles and 91 019.7 mm^3 (+0.42%): the
-rebuilds are slightly heavier because every omitted feature (D3, D5, D6)
-*removes* material in the original. The label takes 1108.4 mm^3 and 500
-triangles back out of that.
+Without the label the bottom is 91 028.7 mm^3 (+0.43%): the rebuilds are
+slightly heavier because every omitted feature (D3, D5, D6) *removes* material
+in the original. The label takes 849.8 mm^3 ("Spock"; "MTG" took 1108.4); the
+four domes add 9.0 mm^3 to the bottom and the four dimples take 10.9 from the
+top, against 4 x 2.29 and 4 x 2.79 for the ideal caps (the difference is
+tessellation). Triangle counts are high now because the text and the spheres
+are tessellated finely, not because the model is more complex.
 
 ### Assembly
 
@@ -694,6 +763,105 @@ follows that and refuses to overwrite. It is opt-in, and it archives the *new*
 label; keeping the outgoing one is a manual step before relabelling, which is
 how `-MTG` got there.
 
+### 6.10 The snap domes: how they were missed, and what finding them taught
+
+**How they were missed.** Every check in this repo compared things the rebuild
+already had. The face-by-face comparison only walks planar faces present in
+both meshes, and the lip's outer x faces *are* in both: they matched to
+0.00001 mm. A dome is 336 small non-planar facets that group into nothing, so
+it fell under the comparison's area floor. The interference grid sampled
+vertical rays through the wall band and never looked outside the lip face. And
+the clue was in the first analysis: the lip's outer x faces were 419 mm^2
+against the ~477 a plain 6 mm lip gives, which I read past.
+
+The general lesson is the one 6.7 taught from the other side: **a check that
+only looks at what you built cannot find what you left out.** `audit_missing.py`
+is the answer (below).
+
+**How they were found.** Triangles with a vertex clearly outside the lip face
+(more than 4 microns), above the seam plane, grouped by position: two clusters
+of 324 on each side, identical left and right, 0.772 high. The base ring is
+1.553 x 1.299 (ratio 1.1953, the y scale) and 1.299 = sqrt(1.5^2 - 0.75^2), so
+the base design's dome is a cap of a 1.5 mm sphere 0.75 high, and the height
+profile matches that sphere at every radius sampled.
+
+**Measuring positions: use the bounding box, not the mean.** A first pass took
+each ring's centre as the mean of its vertices and put the dimples 0.13 mm
+higher than the domes at the front. That was an artefact: a search window clips
+the ring unevenly, and a vertex mean follows the clipping. The bounding box of
+the ring is immune to it, and gives dimples coaxial with domes to 0.031 mm.
+The 0.13 mm was reported once, in passing, and is wrong; nothing was built on it.
+
+**The dimple is not the dome's mirror, and the original presses itself.**
+Sectioning dome and dimple at the same depth below their rims:
+
+| depth | dome half-width in y | in z | dimple half-width in y | dome minus dimple in y |
+|---|---|---|---|---|
+| 0.05 | 1.500 | 1.260 | 1.380 | +0.12 |
+| 0.25 | 1.320 | 1.120 | 1.220 | +0.10 |
+| 0.45 | 1.080 | 0.900 | 0.980 | +0.10 |
+| 0.65 | 0.680 | 0.560 | 0.620 | +0.06 |
+
+The dimple is a circle and the dome an ellipse, wider than it in y at every
+depth sampled from the rim down to 0.65 (at the very tip, 0.72, the dimple is
+0.02 wider). The original's own bottom therefore overlaps its own top by ~0.1 mm at
+each flank. `check_ugp100.py` reports this as 0.73 mm of "overlap", which is the
+*height* of that thin sliver along a vertical ray, not its thickness; it took
+a section to see that, and the check output now says so rather than leaving it
+to be misread. The rebuilt dome does not do this (D11).
+
+**Why a lathe, and why the hemisphere.** A spherical cap cannot be an extrude:
+its end caps are flat, so the only extrude-shaped dome is a flat-topped boss.
+A lathe of a closed profile (a centre, an apex on the axis, and a point on the
+equator, joined by the axis edge, a square edge and an arc) gives the cap. The
+profile is the *hemisphere*, not the bare cap: its flat face sits 0.707 inside
+the lip, in solid material, so no face of the dome is coincident with a face of
+the lip. A cap cut off exactly at the lip face would put two coplanar faces
+into the boolean, which is the thing these booleans handle worst. The same trick
+for the dimple puts the hemisphere's flat face 0.914 into the empty groove.
+
+A profile edge on the lathe axis makes SolveSpace print `Vector::WithMagnitude(1)
+of zero vector!` for each cap (the zero-width surface that edge sweeps out). It
+is noise: the mesh is one watertight shell and the cap measures exactly its
+parameters.
+
+Each profile is 14 unknowns and 14 equations (7 points; 4 coincidences, the
+axis horizontal, the square edge vertical, one radius dimension, two placement
+dimensions, and the arc's own equal-radius equation). `dof_report()` gets all
+eight to rank 14.
+
+**Checking it, and checking the check.** `check_snap()` measures all 8 caps
+against their parameters (height, base radius and centre to 0.001 mm), tests
+engagement over the domes' footprint for all four pairings, and measures the
+nearest approach of dome to dimple: 0.0253 mm against a design of 0.0254. Then
+the control: **the same bottom against a top built without dimples must
+overlap, and does, by 2.54 mm**. Without that, "seats clear" is as meaningless
+as the old grid was.
+
+| pairing | at the domes |
+|---|---|
+| rebuild bottom + rebuild top | seats clear |
+| rebuild bottom + ORIGINAL top | seats clear |
+| ORIGINAL bottom + rebuild top | overlap (as the source's own pair) |
+| ORIGINAL bottom + ORIGINAL top | overlap (the source's own press-fit, ~0.1 mm) |
+
+**The audit.** `cad/audit_missing.py` samples the original densely (vertices,
+centroids and edge midpoints: ~57 000 points on the bottom), finds each one's
+distance to the nearest point of the rebuild, and keeps those over 0.25 mm. A
+distance is not a defect: a dropped fillet is also far from the rebuild. So
+regions that are *recorded decisions* are subtracted: the corners (D4), the
+perimeter rounds (D3), the seam-edge and lip-top fillets (D5), the groove-roof
+blend (D6), and the mouth bevel (D5). What is left is, by construction,
+something nobody decided. For the rebuild as it now stands: **nothing**, in
+either part. `--prove` runs it on a rebuild *without* domes and dimples and
+requires the audit to report all eight, and it does: exactly four clusters in
+each part, at exactly those positions.
+
+Its limits: it only looks from the original toward the rebuild, so it finds
+what is missing and not what is extra; its zones are my own judgement of what
+is intended; and a feature under 0.25 mm will not show. It also found
+something while being written: the mouth-bevel difference corrected in D5.
+
 ---
 
 ## 7. Structure of the model
@@ -707,7 +875,8 @@ how `-MTG` got there.
 | `cad/relabel.py` | changes the label: fit report, trial build, then (with `--apply`) rewrite, rebuild, export and verify |
 | `README.md` | the runbook for changing the label |
 | `cad/build_ugp100.py` | emits both `.slvs` |
-| `cad/check_ugp100.py` | the verification in section 5, including the degree-of-freedom check |
+| `cad/check_ugp100.py` | the verification in section 5, including the degree-of-freedom check and the snap engagement |
+| `cad/audit_missing.py` | what the original has that the rebuild does not (6.10); `--prove` shows it can find a missing feature |
 | `../utilities/slvs_write.py` | a reusable `.slvs` writer (groups, requests, params, constraints), plus `dof_report()` |
 
 `build_ugp100.py` reproduces both `.slvs` byte for byte, so the generator
@@ -726,20 +895,21 @@ geometry change behind it.
 
 ### 7.2 Build sequence
 
-**Bottom** (6 sketch + extrude pairs):
+**Bottom** (6 sketch + extrude pairs, then 4 lathes):
 
 1. exterior rounded rectangle, extruded up past everything — UNION
 2. cut away everything above the seam plane — DIFFERENCE
 3. the lip's footprint back as a *solid* block, same vertical extent — UNION
 4. cut away everything above the lip-top plane — DIFFERENCE
-5. the engraved label — DIFFERENCE (D10)
-6. the card cavity, from the floor datum upward — DIFFERENCE
+5. the four snap domes, one lathe each — UNION (D11)
+6. the engraved label — DIFFERENCE (D10)
+7. the card cavity, from the floor datum upward — DIFFERENCE
    (which is what turns step 3's block into a ring)
 
 Doing the cavity *after* the lip block is what keeps every sketch a single
 closed loop; the alternative is a two-loop ring sketch.
 
-**Top** (4 pairs):
+**Top** (4 pairs, then 4 lathes):
 
 1. exterior rounded rectangle, sketched on the exterior top face and pushed
    down — UNION
@@ -748,6 +918,7 @@ closed loop; the alternative is a two-loop ring sketch.
 4. the groove, via the x-normal trapezoid of 6.1 — DIFFERENCE
 5. the lead-in bevel round the groove's mouth, as the two cutters of D9 —
    DIFFERENCE
+6. the four snap dimples, one lathe each — DIFFERENCE (D11)
 
 Both parts end on an operation whose sketch is about the size of the part,
 not the size of a cutter, because the group a file opens on is the one whose
@@ -791,6 +962,7 @@ In `cad/ugp100_params.py`:
 | the label's text | **`python3 cad/relabel.py "text" --apply`** — see `README.md`, do not hand-edit `TEXT` |
 | the label's panel or depth | `PANEL_W`/`PANEL_H`, `TEXT_DEPTH` (asserted against the wall), then rebuild and check |
 | the label's font | `TEXT_FONT`; pick one present on every machine that will open the file |
+| the snap's strength or position | `BUMP_H`, `BUMP_BASE_R`, `DENT_DEPTH`, `DENT_MOUTH_R`, `SNAP_POINTS`; the dome seats with `(GROOVE_HX + DENT_DEPTH) - (LIP_HX + BUMP_H)` clearance, so change dome and dimple together |
 | easier to drop the top on | `MOUTH_CHAMFER` (0.6); it comes out of the seam land and the lip's full-width engagement, see D5 |
 | lip engagement | `LIP_H` (6.0) |
 | seam angle | the `30.0` inside `SEAM_TAN`, and `Z_SEAM` for its height |
@@ -817,8 +989,13 @@ the point of it.
   back and open at the front. That is a short cantilever rather than a bridge
   and should print, but the round of the G is a shallow overhang worth a look
   in the slicer preview.
-* **Confirm the label's face and layout** (D10): front = the low wide face, and
-  text filling the panel rather than a recessed panel with raised letters.
+* **The snap is untested on a printed part, and is where the print matters
+  most.** The dome is 0.77 mm of interference against a lid whose walls have to
+  flex over it. Whether it clicks, is too stiff to close, or lets go too easily
+  depends on printed wall stiffness, layer orientation and tolerance, none of
+  which a mesh check can see. The source's own dome squeezes its dimple ~0.1 mm
+  per side in y (D11) and this rebuild's does not, so if the lid is loose, that
+  is the first thing to put back.
 * `-tight` in the source name implies a looser top exists. If it turns up,
   the only thing that should differ is `CLEAR_X`/`CLEAR_Y`.
 * No print orientation or support study has been done for either half.

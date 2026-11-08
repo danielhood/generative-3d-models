@@ -216,6 +216,167 @@ def check_engraving(tris):
             "margin_bottom": z0, "margin_top": P.Z_FRONT_TOP - z1}
 
 
+def _tri_dist(p, a, b, c):
+    """Distance from point p to triangle abc (Ericson, Real-Time Collision
+    Detection, ClosestPtPointTriangle)."""
+    def sub(u, v): return (u[0] - v[0], u[1] - v[1], u[2] - v[2])
+    def dot(u, v): return u[0] * v[0] + u[1] * v[1] + u[2] * v[2]
+    ab, ac, ap = sub(b, a), sub(c, a), sub(p, a)
+    d1, d2 = dot(ab, ap), dot(ac, ap)
+    if d1 <= 0 and d2 <= 0:
+        q = a
+    else:
+        bp = sub(p, b); d3, d4 = dot(ab, bp), dot(ac, bp)
+        if d3 >= 0 and d4 <= d3:
+            q = b
+        else:
+            vc = d1 * d4 - d3 * d2
+            if vc <= 0 and d1 >= 0 and d3 <= 0:
+                t = d1 / (d1 - d3); q = tuple(a[i] + t * ab[i] for i in range(3))
+            else:
+                cp = sub(p, c); d5, d6 = dot(ab, cp), dot(ac, cp)
+                if d6 >= 0 and d5 <= d6:
+                    q = c
+                else:
+                    vb = d5 * d2 - d1 * d6
+                    if vb <= 0 and d2 >= 0 and d6 <= 0:
+                        t = d2 / (d2 - d6); q = tuple(a[i] + t * ac[i] for i in range(3))
+                    else:
+                        va = d3 * d6 - d5 * d4
+                        if va <= 0 and (d4 - d3) >= 0 and (d5 - d6) >= 0:
+                            t = (d4 - d3) / ((d4 - d3) + (d5 - d6))
+                            q = tuple(b[i] + t * (c[i] - b[i]) for i in range(3))
+                        else:
+                            den = 1.0 / (va + vb + vc)
+                            v, w = vb * den, vc * den
+                            q = tuple(a[i] + ab[i] * v + ac[i] * w for i in range(3))
+    return math.sqrt(sum((p[i] - q[i]) ** 2 for i in range(3)))
+
+
+def _cap_stats(tris, face_abs, sg, y, z):
+    """Height (or depth), base radius and centre of the cap on one face."""
+    xf = sg * face_abs
+    win = [t for t in tris if all(abs(v[1] - y) < 2.2 and abs(v[2] - z) < 2.2 for v in t)
+           and any(sg * (v[0] - xf) > 0.004 for v in t)
+           and all(abs(v[0] - xf) < 1.2 for v in t)]
+    vs = [v for t in win for v in t]
+    if not vs:
+        return None
+    ring = [v for v in vs if abs(v[0] - xf) < 2e-4]
+    ys_, zs_ = [v[1] for v in ring], [v[2] for v in ring]
+    return {"h": max(sg * (v[0] - xf) for v in vs),
+            "r": ((max(ys_) - min(ys_)) + (max(zs_) - min(zs_))) / 4.0,
+            "cy": (max(ys_) + min(ys_)) / 2.0, "cz": (max(zs_) + min(zs_)) / 2.0,
+            "verts": vs}
+
+
+def _snap_columns():
+    """Vertical rays across each bump's footprint, from the lip face out to the
+    bump's apex.  Offsets are deliberately untidy for the reason given in
+    section 4's grid."""
+    cols = []
+    for sg in (-1, 1):
+        for (yc, zc) in P.SNAP_POINTS:
+            for k in range(-6, 7):
+                for t in (0.04, 0.13, 0.27, 0.41, 0.55, 0.69, 0.75):
+                    cols.append((sg * (P.LIP_HX + t) + 0.0007 * sg, yc + k * 0.21 + 0.013))
+    return cols
+
+
+def check_snap(rebuilt, ob, ot):
+    """The snap: do the domes and dimples exist as designed, does the dome seat in
+    its dimple, and would this test notice if it did not."""
+    # 1. the caps are what the parameters say
+    for part, face, h_key, want_h, want_r in (
+            ("bottom", P.LIP_HX, "bump", P.BUMP_H, P.BUMP_BASE_R),
+            ("top", P.GROOVE_HX, "dimple", P.DENT_DEPTH, P.DENT_MOUTH_R)):
+        found = 0
+        for sg in (-1, 1):
+            for (y, z) in P.SNAP_POINTS:
+                c = _cap_stats(rebuilt[part], face, sg, y, z)
+                if c is None:
+                    fail("no %s found at %s face, y=%.2f z=%.2f" %
+                         (h_key, "left" if sg < 0 else "right", y, z))
+                    continue
+                found += 1
+                bad = (abs(c["h"] - want_h) > 0.001 or abs(c["r"] - want_r) > 0.001
+                       or abs(c["cy"] - y) > 0.002 or abs(c["cz"] - z) > 0.002)
+                if bad:
+                    fail("%s at %s y=%.2f z=%.2f is height %.4f radius %.4f centre "
+                         "(%.4f, %.4f), not %.4f / %.4f / (%.4f, %.4f)" %
+                         (h_key, "left" if sg < 0 else "right", y, z, c["h"], c["r"],
+                          c["cy"], c["cz"], want_h, want_r, y, z))
+        print("  %-7s %d of 4 %ss found; height/depth %.4f, %s radius %.4f"
+              % (part, found, h_key, want_h, "base" if h_key == "bump" else "mouth",
+                 want_r))
+
+    # 2. the dome seats in the dimple, with the clearance the source has
+    cols = _snap_columns()
+    print("  engagement, vertical rays across each dome's footprint "
+          "(%d columns):" % len(cols))
+    sensitivity = None
+    for label, A, B in (("rebuild bottom + rebuild top", rebuilt["bottom"], rebuilt["top"]),
+                        ("rebuild bottom + ORIGINAL top", rebuilt["bottom"], ot),
+                        ("ORIGINAL bottom + rebuild top", ob, rebuilt["top"]),
+                        ("ORIGINAL bottom + ORIGINAL top", ob, ot)):
+        worst, where = 0.0, None
+        for x, y in cols:
+            o = overlap(ray_spans(A, x, y), ray_spans(B, x, y))
+            if o > worst:
+                worst, where = o, (x, y)
+        verdict = "seats clear" if worst < 1e-3 else \
+            "overlap %.4f mm at x=%.3f y=%.3f" % (worst, where[0], where[1])
+        if worst >= 1e-3 and label.startswith("ORIGINAL bottom"):
+            # not a defect of the rebuild: the source's own dome is an ellipse
+            # ~0.1 mm wider in y than its circular dimple at nearly every depth, so it
+            # presses into the dimple's flanks.  The figure is the vertical
+            # height of that sliver, not its thickness.  See spec 6.10.
+            verdict += "   <- the source's own dome is ~0.1 mm wider than its dimple"
+        print("     %-32s %s" % (label, verdict))
+        if label == "rebuild bottom + rebuild top" and worst >= 1e-3:
+            fail("the rebuilt dome does not seat in the rebuilt dimple: %.4f mm of "
+                 "overlap" % worst)
+
+    # 3. the clearance the dome seats with: nearest approach of each dome's
+    #    surface to the dimple's.  The caps are concentric spheres, so it is
+    #    (GROOVE_HX + DENT_DEPTH) - (LIP_HX + BUMP_H) at the apex and no less
+    #    anywhere else.
+    want_gap = (P.GROOVE_HX + P.DENT_DEPTH) - (P.LIP_HX + P.BUMP_H)
+    tmin = 1e9
+    for sg in (-1, 1):
+        for (y, z) in P.SNAP_POINTS:
+            c = _cap_stats(rebuilt["bottom"], P.LIP_HX, sg, y, z)
+            near = [t for t in rebuilt["top"]
+                    if all(abs(v[1] - y) < 3.5 and abs(v[2] - z) < 3.5 and
+                           abs(v[0] - sg * P.LIP_HX) < 2.5 for v in t)]
+            for v in c["verts"]:
+                if abs(v[0] - sg * P.LIP_HX) < 0.05:       # base ring: on the face
+                    continue
+                d = min(_tri_dist(v, *t) for t in near)
+                tmin = min(tmin, d)
+    print("  nearest approach of dome to dimple %.4f mm   (design %.4f; the "
+          "tessellation of two spheres accounts for a few hundredths)"
+          % (tmin, want_gap))
+    if tmin < 0.5 * want_gap or tmin > 3.0 * want_gap + 0.05:
+        fail("the dome sits %.4f mm from its dimple, not about %.4f"
+             % (tmin, want_gap))
+
+    # 4. would this test notice if the dimples were missing?
+    with tempfile.TemporaryDirectory() as tmp:
+        src = os.path.join(tmp, "nodimple.slvs"); out = os.path.join(tmp, "nodimple.stl")
+        builder.build_top(dimples=False).write(src)
+        subprocess.run(["solvespace-cli", "export-mesh", "--chord-tol", "0.02",
+                        "--output", out, src], capture_output=True)
+        blank = load_stl(out)
+    worst = max(overlap(ray_spans(rebuilt["bottom"], x, y), ray_spans(blank, x, y))
+                for x, y in cols)
+    print("  control: the same bottom against a top WITHOUT dimples overlaps "
+          "by %.4f mm" % worst)
+    if worst < 0.5 * P.BUMP_H:
+        fail("the engagement test did not see a dome pushing into a dimple-less "
+             "wall (%.4f mm); it would not notice a missing dimple" % worst)
+
+
 def _volume(tris):
     v = 0.0
     for a, b, c in tris:
@@ -409,6 +570,12 @@ def main():
         print("  %-32s %s" % (label, verdict))
         if label == "rebuild bottom + rebuild top" and worst >= 1e-3:
             fail("the rebuilt pair interferes by %.5f mm" % worst)
+
+    print()
+    print("=" * 72)
+    print("5. snap domes and dimples")
+    print("=" * 72)
+    check_snap(rebuilt, ob, ot)
 
     print()
     print("=" * 72)

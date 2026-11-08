@@ -14,6 +14,7 @@ to *use* it.
 | `cad/build_ugp100.py` | generates both `.slvs` |
 | `cad/relabel.py` | **changes the label** |
 | `cad/check_ugp100.py` | full verification against the source STLs |
+| `cad/audit_missing.py` | finds features the original has and the rebuild lacks |
 | `archive/` | kept STLs, named `ultra_guard_pro_100_bottom-<label>.stl` |
 | `orig/` | the source STLs |
 
@@ -125,6 +126,26 @@ width-limited. Shorten it, or change the panel in `cad/ugp100_params.py`
 
 **Reverting.** `python3 cad/relabel.py "MTG" --apply`, or `git checkout` the
 files listed above.
+
+## The snap
+
+Four domes on the bottom's lip (two per side) seat in four dimples in the top's
+groove, and that is what holds the lid shut. They are built as spherical caps
+by lathing, parameterised in `cad/ugp100_params.py` (`BUMP_*`, `DENT_*`,
+`SNAP_POINTS`). The dome is a circular cap, not the source's ellipse: it matches
+the source's height and its profile along the direction the lid slides, but is
+about 0.5 mm narrower in y. If the printed lid is too loose, that is the first
+thing to widen. Spec D11 and 6.10.
+
+Whenever a part is rebuilt from a source, run
+
+```bash
+python3 cad/audit_missing.py            # ~25 s; exit 0 = nothing unexplained
+python3 cad/audit_missing.py --prove    # shows it can see a missing feature
+```
+
+as well as `check_ugp100.py`. The checks compare what the rebuild *has*; this
+asks what it *lacks*.
 
 ## Other changes
 

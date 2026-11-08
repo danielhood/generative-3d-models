@@ -156,6 +156,23 @@ equation, so it is not the one-equation constraint it looks like.
 `AddEntity` records can be omitted entirely and `Group.remap` can be `{}` --
 SolveSpace rebuilds both on load.
 
+**Spheres, domes and dimples** (`Sketch.lathe()`): an extrude cannot make a
+curved cap (its ends are flat), but a lathe of a closed profile can. Revolve the
+*hemisphere* -- centre, apex on the axis, and a point on the equator -- rather
+than the bare cap, so the flat face lands inside solid material (or in empty
+space for a cut) and no face is coincident with the part's. A profile edge on
+the axis prints `Vector::WithMagnitude(1) of zero vector!` per lathe; it is
+noise. Worked example: `mtg-deck-boxes/cad/build_ugp100.py` `snap_caps()`.
+
+**Checking a rebuild for what it *lacks*.** Every check that compares the
+rebuild with its source walks what the rebuild already has, so none can find a
+feature left out -- four snap domes were missing through four revisions with
+every check green. `mtg-deck-boxes/cad/audit_missing.py` samples the source
+densely, measures each point's distance to the rebuild, subtracts regions that
+are recorded decisions, and reports what is left; its `--prove` mode leaves the
+features out again and requires the audit to find them. Reusable for any
+rebuild from a source mesh; the zones are the part-specific bit.
+
 **Text** (`Sketch.text()`; `mtg-deck-boxes/cad/text_fit.py` for fitting it):
 a TrueType text request has only **two free points** -- top-left and
 bottom-left, whose separation is the cap height. The right-hand corners are
