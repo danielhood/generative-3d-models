@@ -111,22 +111,96 @@ def datums(S, points):
     return out
 
 
-def spherical_cap(S, tag, datum_pt, face_x, sg, y, height, sphere_r, combine,
-                  visible=False):
-    """A spherical cap standing on (UNION) or cut into (DIFFERENCE) a face that is
-    square to x: a snap dome or a dimple.
+def rect_at(S, g, wp, cx, cy, hx, hy, origin=(0.0, 0.0)):
+    """A closed rectangle centred at WORLD (cx, cy), half-sizes hx and hy, in a
+    horizontal workplane (u = +x, v = +y) whose origin is at world `origin`.
 
-    face_x    where the face is, SIGNED (x = -36.85 for the left lip face)
-    sg        -1 if the face's outward normal is -x (the left face), +1 for +x
-    y         the cap's centre along the face; its other centre coordinate comes
-              from `datum_pt`, a datum point on the face at that centre, whose z
-              the profile's horizontal sketch plane passes through
+    `rect` can only be centred on its workplane's origin; this is for the second
+    and third bars of a set (a divider, a rib) that sit elsewhere.  Fully
+    constrained, 16 unknowns against 16 equations: 4 coincidences, all four
+    edges horizontal or vertical, width and height, and the bottom-left corner
+    placed in x and y against the reference planes.  Pinning against the world
+    planes (not the workplane origin) is what lets two bars share one sketch
+    group without constraints between them: they are independent.
+
+    Rectangles in one sketch must not overlap (an extrude wants disjoint closed
+    loops).  Dividers that cross go in separate groups and are unioned.
+    """
+    ox, oy = origin
+    c = [(cx - hx - ox, cy - hy - oy), (cx + hx - ox, cy - hy - oy),
+         (cx + hx - ox, cy + hy - oy), (cx - hx - ox, cy + hy - oy)]
+    L = [S.line(g, wp, c[i], c[(i + 1) % 4]) for i in range(4)]
+    for i in range(4):
+        S.constraint(POINTS_COINCIDENT, g, wp, ptA=L[i][2], ptB=L[(i + 1) % 4][1])
+    S.constraint(HORIZONTAL, g, wp, entityA=L[0][0])
+    S.constraint(HORIZONTAL, g, wp, entityA=L[2][0])
+    S.constraint(VERTICAL, g, wp, entityA=L[1][0])
+    S.constraint(VERTICAL, g, wp, entityA=L[3][0])
+    S.constraint(PT_PT_DISTANCE, g, wp, valA=2 * hx, ptA=L[0][1], ptB=L[0][2],
+                 disp=(0.0, -hy - 3.0, 0.0))
+    S.constraint(PT_PT_DISTANCE, g, wp, valA=2 * hy, ptA=L[1][1], ptB=L[1][2],
+                 disp=(hx + 3.0, 0.0, 0.0))
+    S.constraint(PT_PLANE_DISTANCE, g, valA=cx - hx, ptA=L[0][1],
+                 entityA=ENT_YZ_WORKPLANE)
+    S.constraint(PT_PLANE_DISTANCE, g, valA=cy - hy, ptA=L[0][1],
+                 entityA=ENT_ZX_WORKPLANE)
+    return L
+
+
+def corner_wedge(S, g, wp, corner, along_wall, along_face, ch, over, pin):
+    """One 45 deg chamfer, drawn in the plane perpendicular to the edge it cuts.
+
+    `corner` is where the groove wall meets the seam face; `along_wall` and
+    `along_face` are unit directions leading away from it, up the wall and
+    outboard across the seam face.  The chamfer itself is the line between the
+    two points `ch` along each.
+
+    The triangle actually drawn is that one pushed `over` mm back along both
+    directions, which leaves its hypotenuse on exactly the same line (the two
+    offsets cancel) while moving its two legs out of the part and into open
+    space.  Without that, the legs would sit exactly on the groove wall and on
+    the seam face, and a cutter face coincident with a face of the part is the
+    boolean's least favourite thing.
+
+    `pin` fixes a sketch point with two dimensions; three pinned vertices plus
+    three coincidences is 12 equations for the triangle's 12 params.
+    """
+    def pt(a, b):
+        return (corner[0] - over * (along_wall[0] + along_face[0]) +
+                a * along_wall[0] + b * along_face[0],
+                corner[1] - over * (along_wall[1] + along_face[1]) +
+                a * along_wall[1] + b * along_face[1])
+    leg = ch + 2 * over
+    tri = [pt(0.0, 0.0), pt(leg, 0.0), pt(0.0, leg)]
+    L = [S.line(g, wp, tri[i], tri[(i + 1) % 3]) for i in range(3)]
+    for i in range(3):
+        S.constraint(POINTS_COINCIDENT, g, wp, ptA=L[i][2], ptB=L[(i + 1) % 3][1])
+    for i in range(3):
+        pin(g, wp, L[i][1], tri[i])
+
+
+def spherical_cap(S, tag, datum_pt, face, sg, across, height, sphere_r, combine,
+                  visible=False, along="x"):
+    """A spherical cap standing on (UNION) or cut into (DIFFERENCE) a vertical face:
+    a snap dome or a dimple.
+
+    face      where the face is along the cap's axis, SIGNED (x = -36.85 for the
+              left lip face, y = +40.4 for the back one)
+    sg        the direction the APEX points, from the face, along `along`: -1 or
+              +1.  For a dome that is the face's outward normal.  For a dimple it
+              is the opposite: INTO the material.  Get this wrong and the sphere's
+              hemisphere lands in the material instead of the void behind the
+              face, and a dimple cuts twice its volume (4.43 mm^3 for a 2.29 cap).
+    across    the cap's centre ALONG the face: y for an x-axis cap, x for a y-axis cap
     height    how far the apex stands off (or cuts into) the face
     sphere_r  the sphere's radius.  Cap height, base radius b and sphere radius
               R are tied by R = (b^2 + h^2) / (2h): fix any two.
+    along     "x" (a cap on a face square to x) or "y" (square to y).  `datum_pt`
+              is a datum point at the cap's centre on the face; the profile's
+              horizontal sketch plane passes through its z.
 
     The cap is a revolved quarter-disc.  The profile is a closed triangle of three
-    edges drawn in a horizontal plane through the cap's centre, u = x and v = y:
+    edges drawn in a horizontal plane through the cap's centre:
 
         C -- the centre of the sphere, on the axis, just INSIDE the face
         A -- the apex, on the axis, `height` outside the face
@@ -139,22 +213,33 @@ def spherical_cap(S, tag, datum_pt, face_x, sg, y, height, sphere_r, combine,
     COINCIDENT with the part's, and coincident faces are what these booleans
     handle worst.  An extrude cannot make a cap at all: its end faces are flat.
 
+    For a y-axis cap the sketch's u axis is +y and its v axis is -x, which keeps
+    (u, v, normal) right-handed with the normal +z; the sphere is symmetric about
+    the axis so which side E falls on is immaterial.
+
     Fully constrained: 7 points (14 unknowns) against 4 coincidences, the axis
     horizontal, the square edge vertical, one radius dimension, two placement
     dimensions and the arc's own equal-radius equation.  The one placed point is
     the sphere's centre.
     """
+    if along == "x":
+        u, v = (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)
+        along_plane, across_plane = ENT_YZ_WORKPLANE, ENT_ZX_WORKPLANE
+    elif along == "y":
+        u, v = (0.0, 1.0, 0.0), (-1.0, 0.0, 0.0)
+        along_plane, across_plane = ENT_ZX_WORKPLANE, ENT_YZ_WORKPLANE
+    else:
+        raise ValueError("along must be 'x' or 'y', not %r" % (along,))
     R = sphere_r
     cin = R - height                                  # centre, inside the face
-    g, wp = S.workplane_group(tag + "-profile", datum_pt, (1.0, 0.0, 0.0),
-                              (0.0, 1.0, 0.0), visible=False)
+    g, wp = S.workplane_group(tag + "-profile", datum_pt, u, v, visible=False)
     C = (-sg * cin, 0.0)                              # relative to the face point
     A = (sg * height, 0.0)
     E = (-sg * cin, R)
     axis = S.line(g, wp, C, A)
     side = S.line(g, wp, C, E)
-    # the arc runs counter-clockwise: E -> A on the left face (90 -> 180 degrees
-    # about C), A -> E on the right (0 -> 90)
+    # the arc runs counter-clockwise: E -> A on a negative face (90 -> 180 degrees
+    # about C), A -> E on a positive one (0 -> 90)
     arc = S.arc(g, wp, C, E, A) if sg < 0 else S.arc(g, wp, C, A, E)
     a_start, a_end = (arc[2], arc[3])
     S.constraint(POINTS_COINCIDENT, g, wp, ptA=axis[1], ptB=side[1])
@@ -167,10 +252,10 @@ def spherical_cap(S, tag, datum_pt, face_x, sg, y, height, sphere_r, combine,
     S.constraint(VERTICAL, g, wp, entityA=side[0])
     S.constraint(PT_PT_DISTANCE, g, wp, valA=R, ptA=side[1], ptB=side[2],
                  disp=(-3.0 * sg, R / 2.0, 0.0))
-    # the sphere's centre is the one point that is placed: x and y against the
-    # reference planes (the sketch plane itself is z = the datum's z)
-    S.constraint(PT_PLANE_DISTANCE, g, valA=face_x - sg * cin,
-                 ptA=axis[1], entityA=ENT_YZ_WORKPLANE)
-    S.constraint(PT_PLANE_DISTANCE, g, valA=y, ptA=axis[1],
-                 entityA=ENT_ZX_WORKPLANE)
+    # the sphere's centre is the one point that is placed, against the reference
+    # planes (the sketch plane itself is z = the datum's z)
+    S.constraint(PT_PLANE_DISTANCE, g, valA=face - sg * cin,
+                 ptA=axis[1], entityA=along_plane)
+    S.constraint(PT_PLANE_DISTANCE, g, valA=across, ptA=axis[1],
+                 entityA=across_plane)
     return S.lathe(tag, g, axis[0], axis[1], combine=combine, visible=visible)
