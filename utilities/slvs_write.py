@@ -20,6 +20,7 @@ MAGIC = b"\xb1\xb2\xb3SolveSpaceREVa\n\n"
 
 # Group.type
 DRAWING_3D, DRAWING_WORKPLANE, EXTRUDE, LATHE = 5000, 5001, 5100, 5101
+TRANSLATE = 5201
 # Group.subtype
 WORKPLANE_BY_POINT_ORTHO = 6000
 ONE_SIDED, TWO_SIDED = 7000, 7001
@@ -211,6 +212,43 @@ class Sketch:
         for i in range(3):
             self.params.append((base | i, vec[i]))
         self._extrude_groups.append(g)
+        return g
+
+    def translate(self, name, source_group, step, count, combine=DIFFERENCE,
+                  color="00646464", visible=True, skip_first=False, subtype=ONE_SIDED):
+        """SolveSpace's "Step translating": repeat the solid that `source_group` (an
+        extrude, immediately before this) contributed, `count` times, each copy
+        moved by `vec` more than the last, and combine the copies the same way.
+        One cutter extrude plus this is how a row of identical holes is made
+        without drawing each one: 57 holes cost one sketch, one extrude and one
+        group, and the pitch and the count stay editable in the GUI.
+
+        `step` is the distance between neighbouring copies.  `count` INCLUDES the
+        source, so count=57 is 57 holes.  Both were measured, not assumed, and are
+        pinned by a test in selftest.py: the group stores HALF the step (as an
+        extrude stores half its length), so a stored 2.0 gives copies 4.0 apart.
+        The write does that halving; callers think in real distances.
+        """
+        g = self.next_group; self.next_group += 1
+        self.group_names[g] = name
+        self._rec("AddGroup", [
+            ("Group.h.v", self.x(g)),
+            ("Group.type", TRANSLATE),
+            ("Group.order", g - 1),
+            ("Group.name", name),
+            ("Group.opA.v", self.x(source_group)),
+            ("Group.valA", self.f(float(count))),
+            ("Group.color", color),
+            ("Group.subtype", subtype),
+            ("Group.skipFirst", 1 if skip_first else None),
+            ("Group.meshCombine", combine),
+            ("Group.visible", 1 if visible else 0),
+            ("Group.scale", self.f(1.0)),
+            ("Group.remap", "{\n}"),
+        ])
+        base = 0x80000000 | (g << 16)
+        for i in range(3):
+            self.params.append((base | i, step[i] / 2.0))
         return g
 
     def lathe(self, name, sketch_group, axis_line, axis_point, combine=UNION,

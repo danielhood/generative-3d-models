@@ -131,14 +131,17 @@ case too; to change it for the case alone, assign a number here instead.
 
 ## Print status
 
-**First print complete, PLA, 2026-11-08 (before the finger ledges and the thinner dividers):** the lid locks "perfectly", neither
+**First print complete, PLA, 2026-11-08 (before the finger ledges and the thinner dividers; the case was later printed from the final STLs, see below):** the lid locks "perfectly", neither
 too tight nor too loose, with the same feel as prints of the single box's
 original STLs (printed in both PLA and PETG). Original-STL and rebuilt
 single-box halves also interchange: an original top on a new bottom, and the
 reverse, both fit. So the 12-dome snap, the main risk recorded in the spec, did
 not turn out to be a problem, and the front/back snap being slightly looser by
 design (0.092 mm against 0.025 mm; spec section 5) was not reported as a problem.
-PETG has not been tried for the case. **The finger ledges and the 1.6 mm dividers are not printed yet.**
+PETG has not been tried for the case.
+
+**Printed from the final STLs (ledges, 1.6 mm dividers):** the user reports (2026-11-17) that the domes and
+ledges "work very well with the printed case". Nothing has been reported against the 1.6 mm dividers.
 
 ## Printing
 
