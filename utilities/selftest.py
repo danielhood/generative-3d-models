@@ -311,6 +311,32 @@ def solvespace_tests():
               t4 is not None and close(8000.0 - volume(t4), math.pi * H * (3 * BASE_R ** 2 + H * H) / 6, 0.15),
               volume(t4))
 
+        # step-and-repeat: a row of holes from one cutter.  The count INCLUDES the
+        # original and the group stores half the step, both found by measuring.
+        from mesh_rays import axis_spans
+
+        def holes(count, step):
+            S5 = Sketch()
+            p0, p1 = datums(S5, [(0.0, 0.0, 0.0), (0.0, 0.0, 12.0)])
+            g5, w5 = S5.workplane_group("block", p0, (1, 0, 0), (0, 1, 0), visible=False)
+            rect(S5, g5, w5, 10.0, 30.0)
+            S5.extrude("block-x", g5, (0.0, 0.0, 5.0), combine=UNION, visible=False)   # z 0..10
+            g6, w6 = S5.workplane_group("hole", p1, (1, 0, 0), (0, 1, 0), visible=False)
+            rect_at(S5, g6, w6, 0.0, -20.0, 1.0, 1.0)
+            eg = S5.extrude("hole-x", g6, (0.0, 0.0, -5.0), combine=DIFFERENCE, visible=False)  # z 2..12
+            S5.translate("holes", eg, (0.0, step, 0.0), count, DIFFERENCE, visible=True)
+            t = export_mesh(write("holes%d.slvs" % count, S5))["tris"]
+            sp = axis_spans(t, 1, 0.0, 6.0) if t else []
+            return [round((sp[i][1] + sp[i + 1][0]) / 2.0, 3) for i in range(len(sp) - 1)], t
+
+        centres, t5 = holes(5, 4.0)
+        check("step-and-repeat: count 5, step 4 makes 5 holes 4 apart (count includes the original)",
+              centres == [-20.0, -16.0, -12.0, -8.0, -4.0], centres)
+        check("...and a count of 1 is just the original hole", holes(1, 4.0)[0] == [-20.0], holes(1, 4.0)[0])
+        check("...each hole removes its own volume (5 x 2 x 2 x 8)",
+              t5 is not None and close(20.0 * 60.0 * 10.0 - 5 * 2 * 2 * 8 - volume(t5), 0.0, 0.5),
+              volume(t5) if t5 else None)
+
         print("\nslvs_check: it must PASS a sound file and FAIL broken ones")
         p = check_file(good, amp=0.3, seeds=2, out=lambda *_: None)
         check("a sound file passes all three checks", p == [], p)
