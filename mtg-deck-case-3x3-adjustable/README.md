@@ -11,7 +11,12 @@ rationale, measurements and open items are in
 [`deck_case_adjustable_spec.md`](deck_case_adjustable_spec.md); this file is how to
 *use* it.
 
-**Status: modelled and mesh-verified; not printed.** The shell is the 3 x 3 case's, which
+**Update 2026-11-19: this holes-and-arms design is being replaced.** A printed test showed the arms too tight and flexible,
+the body binding, and a base print time of about 24 h. The replacement is slots in the lane faces and tabs on
+the divider, with no holes or arms; its divider and a short test base are in [`slot-test/`](slot-test/) and
+the full tray and lid will follow once they fit.
+
+**Status of this design: modelled and mesh-verified, test-printed (a divider and the base); not adopted.** The shell is the 3 x 3 case's, which
 printed well in PLA with its lock and finger ledges; the lane walls, holes and dividers
 have not been printed.
 
