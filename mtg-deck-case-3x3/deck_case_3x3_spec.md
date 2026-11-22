@@ -5,7 +5,7 @@ Parts: `cad/build_case.py` -> `deck_case_3x3_bottom.slvs` (the tray),
 Parameters: `cad/case_params.py`  ·  Verification: `cad/check_case.py`
 Source: the single deck box, `../mtg-deck-boxes/` (its spec: `ultra_guard_pro_100_spec.md`)
 Revision: rev D, 2026-11-08 (rev C added the finger ledges, D8; rev D thins the dividers to 1.6 mm, D9)
-Status: **rev B (no ledge, 3 mm dividers) printed in PLA: fits and snaps as designed. Revs C and D (ledges, 1.6 mm dividers) are modelled and mesh-verified; not printed.**
+Status: **rev B (no ledge, 3 mm dividers) printed in PLA: fits and snaps as designed. Revs C and D (ledges, 1.6 mm dividers) were then printed too: the user reports the domes and ledges "work very well" (2026-11-17).**
 How to use it, and what every variable controls: [`README.md`](README.md).
 
 A case that holds nine of the single Ultra Guard Pro 100+ boxes' card slots in a
@@ -112,7 +112,7 @@ case shrinks by 2.8 mm each way (two dividers 1.4 mm thinner), and everything th
 on the grid moves with it, because it is derived: the slot pitch, the dome and dimple
 positions, the divider positions, the ledge's width. The outer walls, lip, groove,
 clearances and the snap's size are untouched. What the PLA print tested is the lip,
-groove and snap, not the dividers, so this change is unprinted. Things to watch: 1.6
+groove and snap, not the dividers, so when this change was made it was unprinted (the final STLs were later printed; see section 7). Things to watch: 1.6
 mm is four 0.4 mm extrusion widths, so the dividers print but are not stiff
 (the tray's stand about 70 mm tall but cross and join one another; the lid's hang 24 mm
 from the ceiling and are free along their lower edge); and a thinner divider gives a stack less
@@ -150,8 +150,8 @@ sleeve. Only the plan view is rounded, as the ledge is 2 mm thick.
 * *The tip.* The flank's last ~6 mm are under 0.2 mm proud, below what a 0.4 mm
   nozzle prints as a separate feature, so the printed ledge will look about 136 mm
   wide, not 148. Harmless: it joins the wall, and is not where fingers go.
-* *Not tried.* The size is a request, not a measurement. How much purchase a 3 mm
-  ledge gives a fingertip is unknown until printed; `LEDGE_OUT` and `LEDGE_H` are the
+* *Printed.* The size was a request, not a measurement; the user reports the ledges "work
+  very well" (2026-11-17). `LEDGE_OUT` and `LEDGE_H` remain the
   knobs, and the bed is the limit on `LEDGE_OUT` (4.7 mm of room left; raise
   `LEDGE_ARC_SAG` with it to keep the flat wide).
 
@@ -230,11 +230,11 @@ measures exactly, so they are benign; see `utilities/slvs_cli.py`.
   says the lip, groove, clearances and snap carried over from the originals are
   right, and they are what this case imports. Not tried: PETG for the case; a
   second printer or nozzle; a print after long storage.
-* **Revs C and D (ledges, 1.6 mm dividers) are unprinted.** They change nothing that
-  print tested: the fit, lip, groove and snaps are untouched (the checks above give the same
-  figures as before). What is untested is the ledge itself and the thin dividers: whether 3 mm is enough
-  purchase for a fingertip, and whether 2 mm is stiff enough in PLA at 3 mm
-  out from the wall.
+* **Revs C and D (ledges, 1.6 mm dividers) have been printed** (the final STLs): the user
+  reports the domes and ledges "work very well with the printed case" (2026-11-17), so the
+  3 mm x 2 mm ledge is enough purchase and stiff enough in PLA. Nothing has been reported
+  against the 1.6 mm dividers. They change nothing that the first print tested: the fit,
+  lip, groove and snaps are untouched.
 * **The 12-dome risk below did not materialise** in this print. The closing
   force was reported as right. The numbers are kept because they are what to
   look at if a different material or printer changes that.

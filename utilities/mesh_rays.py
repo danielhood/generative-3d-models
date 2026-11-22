@@ -30,6 +30,14 @@ Things that will bite you:
     height of an interference along a vertical ray, not its thickness: a thin
     sliver standing 0.7 mm tall reports 0.7 mm.  Section it (`mesh_section.py`)
     before believing a number.
+  * A ray cast over a WINDOW of the mesh (only the triangles near it, to be quick)
+    needs AIR at both ends of the window.  Entries and exits are matched by order, so
+    a window edge that cuts through solid drops one hit of a pair and flips the
+    in/out parity of every later hit: spans go missing silently, with no error.  Cut
+    windows where the ray is in air (a hole's centre, beyond the part), or cast
+    against the whole mesh.  See `yband` in `mtg-deck-case-3x3-adjustable/cad/check_case.py`.
+    (Vertical rays need no such care: a window that touches the column keeps every
+    triangle the column crosses.)
   * Parts that are meant to touch (mating faces) overlap by ~0 and the ray
     cast's own noise is of the order 1e-6; call anything under a micron clear.
 """
