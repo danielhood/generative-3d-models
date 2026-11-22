@@ -118,7 +118,7 @@ SNAP_POINTS = ((-31.7434, 35.2115),     # toward the front (-y)
 # ---- engraved label on the bottom's front face ------------------------------
 # Text is cut INTO the exterior face of the front (-y) wall, inside a centred
 # PANEL_W x PANEL_H panel, TEXT_DEPTH deep.  "Front" is the low, wide face --
-# the one the seam is lowest at -- which is 78.2 x 27.25 mm, so a 70 x 20 panel
+# the one the seam is lowest at -- which is 78.2 x 27.25 mm, so a 60 x 20 panel
 # sits in it at the same proportions with a 3.6 mm margin above and below.
 # (The opposite wide face is 74.5 mm tall at the top of its wall.)
 #
@@ -132,7 +132,7 @@ TEXT = "Spock"
 # Verdana relative (wide, open, large x-height).  Verdana itself is not
 # installable here and is not redistributable.
 TEXT_FONT = "BitstreamVeraSans-Roman-builtin.ttf"
-PANEL_W = 70.0
+PANEL_W = 60.0
 PANEL_H = 20.0
 TEXT_DEPTH = 3.0
 # the wall is WALL_Y thick; the pocket must leave enough that it still prints as

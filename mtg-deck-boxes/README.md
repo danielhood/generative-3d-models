@@ -49,7 +49,7 @@ bottom with it in a temporary folder and checks the result. Read the report:
 | You see | It means |
 |---|---|
 | `sized by HEIGHT` | the 20 mm panel height sets the size. Normal for short labels. |
-| `sized by WIDTH` | the label is long enough that the 70 mm width sets the size, so letters are smaller. A `note:` says so. |
+| `sized by WIDTH` | the label is long enough that the 60 mm width sets the size, so letters are smaller. A `note:` says so. |
 | `note: ... descenders` | g j p q y hang below the baseline and count toward the 20 mm, so the **capitals are smaller than a label without them would get**. Expected, not a bug. |
 | `stroke ~1.2 mm` or less | thin. Under 1.2 mm is "printable but only just"; under 0.8 mm (two 0.4 mm nozzle widths) it will not print reliably. A rule of thumb, not a measurement of your printer. |
 | `CANNOT ENGRAVE: ... not in font` | a character the font does not have. See below. |
@@ -111,7 +111,7 @@ SolveSpace does *not* fail on these; it draws an unrelated glyph and exports
 happily, so the tool refuses instead. Use characters the font has.
 
 **`over the 32-character limit`, or `empty`.** Self-explanatory. 32 characters
-is already unreadable on a 70 mm panel.
+is already unreadable on a 60 mm panel.
 
 **`PROBLEM: self-intersecting mesh`.** SolveSpace's boolean failed on that
 label's outlines. Never seen with a real label so far (touching pairs like

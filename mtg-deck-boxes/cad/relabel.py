@@ -95,9 +95,9 @@ def report(text):
 
     desc = f["measure"]["z0"] < -0.02
     if f["binding"] == "width":
-        warn.append("the label is WIDTH-limited: it is long enough that the 70 mm "
-                    "panel, not the 20 mm height, sets the size, so the letters "
-                    "are only %.1f mm tall" % f["cap"])
+        warn.append("the label is WIDTH-limited: it is long enough that the %.0f mm "
+                    "panel, not the %.0f mm height, sets the size, so the letters "
+                    "are only %.1f mm tall" % (P.PANEL_W, P.PANEL_H, f["cap"]))
     if desc:
         warn.append("the label has descenders (g j p q y): they count toward the "
                     "20 mm height, so the capitals are %.1f mm rather than the "

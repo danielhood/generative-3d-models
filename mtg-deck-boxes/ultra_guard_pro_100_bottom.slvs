@@ -2489,7 +2489,7 @@ AddRequest
 Constraint.h.v=00000085
 Constraint.type=31
 Constraint.group.v=00000015
-Constraint.valA=-31.74418937988280831064
+Constraint.valA=-31.34369827880858849767
 Constraint.ptA.v=00300002
 Constraint.entityA.v=00020000
 Constraint.other=0
@@ -2503,7 +2503,7 @@ AddConstraint
 Constraint.h.v=00000086
 Constraint.type=31
 Constraint.group.v=00000015
-Constraint.valA=7.92797146596521873363
+Constraint.valA=7.99987377013773492962
 Constraint.ptA.v=00300002
 Constraint.entityA.v=00010000
 Constraint.other=0
@@ -2532,7 +2532,7 @@ Constraint.h.v=00000088
 Constraint.type=30
 Constraint.group.v=00000015
 Constraint.workplane.v=80150000
-Constraint.valA=15.06000000000000049738
+Constraint.valA=14.86999999999999921840
 Constraint.ptA.v=00300001
 Constraint.ptB.v=00300002
 Constraint.other=0
@@ -3574,35 +3574,35 @@ Param.val=13.62717515458673922524
 AddParam
 
 Param.h.v.=00300010
-Param.val=-31.74418937988280831064
+Param.val=-31.34369827880858849767
 AddParam
 
 Param.h.v.=00300011
-Param.val=9.36079631137847911759
+Param.val=9.24269861555099581096
 AddParam
 
 Param.h.v.=00300013
-Param.val=-31.74418937988280831064
+Param.val=-31.34369827880858849767
 AddParam
 
 Param.h.v.=00300014
-Param.val=-5.69920368862152049161
+Param.val=-5.62730138444900429562
 AddParam
 
 Param.h.v.=00300016
-Param.val=30.44281160690520593448
+Param.val=30.05873895050998356737
 AddParam
 
 Param.h.v.=00300017
-Param.val=-5.69920368862152049161
+Param.val=-5.62730138444900429562
 AddParam
 
 Param.h.v.=00300019
-Param.val=30.44281160690520593448
+Param.val=30.05873895050998356737
 AddParam
 
 Param.h.v.=0030001a
-Param.val=9.36079631137847911759
+Param.val=9.24269861555099581096
 AddParam
 
 Param.h.v.=80160000

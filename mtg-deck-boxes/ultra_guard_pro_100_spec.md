@@ -56,7 +56,7 @@ Assembled: 78.234 x 86.062 x 102.05 mm exterior.
 | R6 | Parametric and editable in SolveSpace, not a dumb solid | implied by "solvespace files" |
 | R7 | Each rebuilt half should still mate with the original other half | reading of R2 |
 | R8 | Watertight, single-shell, printable meshes | repo standard |
-| R9 | Engraved text on the bottom's front face, in a centred 70 x 20 mm panel, ~3 mm deep, not through the wall | rev C request |
+| R9 | Engraved text on the bottom's front face, in a centred 60 x 20 mm panel, ~3 mm deep, not through the wall | rev C request |
 | R10 | Changing the label is a routine, low-risk operation with a documented procedure | rev D request |
 | R11 | The lid snaps shut: four domes on the bottom's lip seat in dimples in the top's groove | rev E request |
 
@@ -256,8 +256,12 @@ legs — which leaves the hypotenuse on the same line while lifting the legs
 off the groove wall and the seam face, for the same reason.
 
 **D10 — The label.** A label is cut into the **front (-y) face** of the bottom,
-in Bitstream Vera Sans, 3.000 mm deep, fitted to a 70 x 20 mm panel centred on
-the face. The current label is **"Spock"** (rev D); rev C's was "MTG". The
+in Bitstream Vera Sans, 3.000 mm deep, fitted to a 60 x 20 mm panel centred on
+the face. (The panel was 70 mm wide until the "Picard" variant, which at 70 mm
+left only 1.9 mm to each side's corner tangent; at 60 mm it leaves 6.9 mm. That
+also made "Spock" width-limited, so its caps went from 15.06 to 14.87 mm.) The
+current label is **"Spock"** (rev D); rev C's was "MTG"; `archive/` holds
+"Picard" and the 70 mm-panel "Spock". The
 procedure for changing it is `README.md`; this is why it is built the way it
 is. Several of these were judgment calls on an ambiguous brief, and were
 accepted when rev C was reviewed:
