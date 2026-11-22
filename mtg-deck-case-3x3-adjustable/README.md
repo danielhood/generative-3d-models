@@ -20,6 +20,7 @@ printed, found too tight and too slow to print, and replaced; it is in [`archive
 | `deck_case_adjustable_bottom.slvs` / `.stl` | the tray: floor, outer walls, lip, four 5 mm lane walls with slots, 12 snap domes, a finger ledge |
 | `deck_case_adjustable_top.slvs` / `.stl` | the lid: ceiling, groove, 12 dimples, four 5 mm walls hanging to meet the tray's, a finger ledge |
 | `deck_case_adjustable_divider.slvs` / `.stl` | **one** divider; print as many as you need (clone it in the slicer) |
+| `deck_case_adjustable_bottom.3mf`, `deck_case_adjustable_top.3mf` | slicer projects for printing the tray and the lid |
 | `cad/case_params.py` | every dimension; most are imported from the single box |
 | `cad/build_case.py` | generates the three `.slvs` |
 | `cad/check_case.py` | verifies all three on the exported meshes, with controls that must fail |
