@@ -11,11 +11,11 @@ Exports all three through SolveSpace and measures the MESHES, not the parameters
   3. the lanes: three, each the single box's cavity width, the full depth, no cross walls
   4. the outer walls, lip and groove are the single box's
   5. heights, and the card space
-  6. the lane walls: four, 5 mm, in the tray and the lid; the holes and slits in them
+  6. the lane walls: four, 5 mm, in the tray and the lid; the staggered slots in the tray's
   7. the snap: 12 domes and 12 dimples, as in the 3 x 3 case, centred on the lanes
   8. the finger ledge on the front of each half
   9. assembly: tray and lid; the divider in every lane at the ends and middle of the
-     holes; its clearances; that it hangs on its bridges; the neighbours rule
+     slots; its clearances; that it hangs on its tabs; neighbours 3 mm apart coexist
  10. the committed STL files, the ones that get printed, are the current design
 
 Every check is written so that the error it exists to catch would fail it, and each
@@ -92,16 +92,14 @@ def window(tris, x0, x1, y0, y1):
             and max(v[1] for v in t) >= y0 and min(v[1] for v in t) <= y1]
 
 
-def yband(cy):
-    """A y window for ray-casting along a hole column.  A ray along y needs air at both
-    ends of its window or the in/out parity is wrong; hole centres are air, and 8 mm is
-    two pitches, so cy +- 8 is a hole centre.  Near the front and back walls the window
-    opens out past the part instead (where the ray starts in air too)."""
-    lo, hi = cy - 8.0, cy + 8.0
-    if lo < -C.IN_HY + 4.0:
-        lo = -130.0
-    if hi > C.IN_HY - 4.0:
-        hi = 130.0
+def yband(cy, ys):
+    """A y window for ray-casting along a wall at one set's slot at cy.  A ray along y needs
+    air at both ends of its window or the in/out parity is wrong, and a slot's centre is
+    air; one pitch either side of cy is the neighbouring slot of the SAME set.  Past the
+    set's first or last slot the window opens out beyond the part instead (a ray there
+    starts in air too)."""
+    lo = cy - C.SLOT_PITCH if cy - C.SLOT_PITCH >= ys[0] - 1e-9 else -130.0
+    hi = cy + C.SLOT_PITCH if cy + C.SLOT_PITCH <= ys[-1] + 1e-9 else 130.0
     return lo, hi
 
 
@@ -115,45 +113,66 @@ def col_overlap(a, b, columns):
 
 
 # ---------------------------------------------------------------------------
-# the lane walls and holes, as one function so the control can run it too
+# the slots, as functions so the controls can run them too
 # ---------------------------------------------------------------------------
-def wall_problems(tray, label):
-    """Everything wrong with the tray's holes and slits, measured off the mesh."""
+ZS = C.WALL_TOP - 12.0                     # a height inside the slots (and the tabs)
+WEB_Y = 1.5137                             # between slots of both sets (set A at 0 +-1, set B at 3 +-1)
+
+
+def wall_thickness(tray, y, z, cx):
+    """How much solid the wall centred at cx has at (y, z): the length of the solid runs along x
+    that lie inside its 5 mm band.  A slot takes some away; a wall cut right through is 0."""
+    lo, hi = cx - C.WALL_T / 2.0, cx + C.WALL_T / 2.0
+    return sum(max(0.0, min(h, hi) - max(l, lo)) for l, h in axis_spans(tray, 0, y, z))
+
+
+def slot_problems(tray, label):
+    """Everything wrong with the tray's slots, measured off the mesh."""
     bad = []
-    web = C.HOLE_YS[0] + C.HOLE_PITCH / 2.0 + 0.0137          # between the first two holes
-    for cx, kind in zip(C.WALL_CENTRES_X, C.WALL_KINDS):
-        # the column of holes: along y through the wall's middle
-        sp = axis_spans(tray, 1, cx, 40.0)
-        gaps = [sp[i + 1][0] - sp[i][1] for i in range(len(sp) - 1)]
-        cen = [(sp[i + 1][0] + sp[i][1]) / 2.0 for i in range(len(sp) - 1)]
-        if len(gaps) != C.HOLE_N or any(abs(g - C.HOLE) > TOL for g in gaps) or \
-                any(abs(a - b) > TOL for a, b in zip(cen, C.HOLE_YS)):
-            bad.append("%s %s wall: %d holes along y (want %d of %.1f at pitch %.1f)"
-                       % (label, kind, len(gaps), C.HOLE_N, C.HOLE, C.HOLE_PITCH))
-        # a hole's width across the wall, and its depth
-        y = C.HOLE_YS[7]
-        sx = axis_spans(tray, 0, y, 40.0)
-        want_lo, want_hi = cx - C.HOLE / 2.0, cx + C.HOLE / 2.0
-        if not any(abs(sx[i][1] - want_lo) < TOL and abs(sx[i + 1][0] - want_hi) < TOL for i in range(len(sx) - 1)):
-            bad.append("%s %s wall: the hole at y=%.1f is not x = %.3f .. %.3f" % (label, kind, y, want_lo, want_hi))
-        sz = axis_spans(tray, 2, cx, y)
-        if not sz or abs(sz[0][1] - C.HOLE_BOTTOM) > TOL:
-            bad.append("%s %s wall: the hole's bottom is z=%s, want %.4f (%.1f deep)"
-                       % (label, kind, "%.4f" % sz[0][1] if sz else "absent", C.HOLE_BOTTOM, C.HOLE_DEPTH))
-        # the wall's top between holes
-        sw = axis_spans(tray, 2, cx, web)
+    for face, into, which in C.SLOT_FACES:
+        ys = C.A_YS if which == "A" else C.B_YS
+        tag = "%sx face %+.2f (set %s)" % ("+" if face > 0 else "-", face, which)
+        x_in = face + into * 1.0                        # 1 mm into the wall from the face
+        sp = axis_spans(tray, 1, x_in, ZS)
+        got = [(sp[i][1] + sp[i + 1][0]) / 2.0 for i in range(len(sp) - 1)]
+        wid = [sp[i + 1][0] - sp[i][1] for i in range(len(sp) - 1)]
+        if len(got) != len(ys) or any(abs(a - b) > TOL for a, b in zip(got, ys)) or any(abs(w - C.SLOT_W) > TOL for w in wid):
+            bad.append("%s %s: %d slots at y = %s... (want %d, %.1f wide, from %.0f to %.0f)"
+                       % (label, tag, len(got), [round(g, 2) for g in got[:3]], len(ys), C.SLOT_W, ys[0], ys[-1]))
+        # the slot's floor, and the wall's top between slots
+        ymid = ys[len(ys) // 2]
+        sz = axis_spans(tray, 2, x_in, ymid)
+        if not sz or abs(sz[0][1] - C.SLOT_FLOOR) > TOL:
+            bad.append("%s %s: slot floor is z=%s, want %.4f (%.0f below the wall top)" % (label, tag, "%.4f" % sz[0][1] if sz else "absent", C.SLOT_FLOOR, C.SLOT_H))
+        sw = axis_spans(tray, 2, x_in, WEB_Y)
         if not sw or abs(sw[0][1] - C.WALL_TOP) > TOL:
-            bad.append("%s %s wall: top between holes is z=%s, want %.4f" % (label, kind, "%.4f" % sw[0][1] if sw else "absent", C.WALL_TOP))
-        # the slits: skins either side of the hole, at a hole and between holes
-        for side, off in (("left", -(C.HOLE / 2.0 + C.SKIN / 2.0)), ("right", C.HOLE / 2.0 + C.SKIN / 2.0)):
-            slit = (kind == "part") or (kind == "liner-l" and side == "right") or (kind == "liner-r" and side == "left")
-            want = C.WALL_TOP - C.SLIT_H if slit else C.WALL_TOP
-            s = axis_spans(tray, 2, cx + off, y)
-            top = s[0][1] if s else None
-            if top is None or abs(top - want) > TOL:
-                bad.append("%s %s wall, %s skin at a hole: top z=%s, want %.4f (%s)"
-                           % (label, kind, side, "%.4f" % top if top else "absent", want, "slit" if slit else "no slit"))
+            bad.append("%s %s: wall top between slots is z=%s, want %.4f" % (label, tag, "%.4f" % sw[0][1] if sw else "absent", C.WALL_TOP))
+    # what is left of each wall at a slot (SKIN), between slots (the full 5), and the ends
+    for cx, kind in zip(C.WALL_CENTRES_X, C.WALL_KINDS):
+        for y, want, what in ((C.A_YS[5], C.SKIN, "an A slot"), (C.B_YS[5], C.SKIN, "a B slot"), (WEB_Y, C.WALL_T, "between slots")):
+            thick = wall_thickness(tray, y, ZS, cx)
+            full = C.WALL_T if what == "between slots" else None
+            # at a slot a wall keeps SKIN if that set has a slot IN this wall, else the full wall
+            slot_here = (what == "an A slot" and any(w == "A" and abs(f - cx) < C.WALL_T for f, i, w in C.SLOT_FACES)) or \
+                        (what == "a B slot" and any(w == "B" and abs(f - cx) < C.WALL_T for f, i, w in C.SLOT_FACES))
+            exp = full if full else (C.SKIN if slot_here else C.WALL_T)
+            if abs(thick - exp) > TOL:
+                bad.append("%s %s wall at %s (y=%.1f): %.3f thick, want %.3f" % (label, kind, what, y, thick, exp))
     return bad
+
+
+def thinnest_partition(tray):
+    """The thinnest the PARTITIONS ever get at slot height, scanning y every 0.25 mm; a wall cut
+    right through at some y has no run containing its centre and counts as 0."""
+    worst = C.WALL_T
+    y = -C.IN_HY + 4.0
+    while y < C.IN_HY - 4.0:
+        for cx, kind in zip(C.WALL_CENTRES_X, C.WALL_KINDS):
+            if kind != "part":
+                continue
+            worst = min(worst, wall_thickness(tray, y, ZS, cx))
+        y += 0.25
+    return worst
 
 
 # ---------------------------------------------------------------------------
@@ -236,7 +255,7 @@ def main():
     print("=" * 72)
     print("3. the lanes")
     print("=" * 72)
-    web_y = C.HOLE_YS[0] + C.HOLE_PITCH / 2.0 + 0.0137          # between two holes, so no slit
+    web_y = WEB_Y                                             # between slots of both sets
     for name, t, z in (("tray", tray, 30.0), ("lid", lid, 90.0)):
         solid, gap = runs(axis_spans(t, 0, web_y, z))
         want_solid = [C.WALL_X + C.WALL_T, C.WALL_T, C.WALL_T, C.WALL_X + C.WALL_T]
@@ -252,19 +271,17 @@ def main():
     (ok if abs(C.LANE_W - 2 * B.INT_HX) < 1e-9 else fail)("a lane is exactly the single box's cavity width, %.4f" % C.LANE_W)
     (ok if abs(2 * C.IN_HY - (3 * 2 * B.INT_HY + 2 * 1.6)) < 1e-9 else fail)(
         "the interior depth is the 3 x 3 case's, %.4f" % (2 * C.IN_HY))
-    # the lane faces are smooth below the slits: the lane's width at a hole is the same as between holes
+    # the lane faces are smooth below the slots: the lane's width is the same at a slot's y, a web's y, and anywhere
     smooth = True
-    for y, want in ((C.HOLE_YS[3], [C.HOLE, C.LANE_W, C.HOLE, C.LANE_W, C.HOLE, C.LANE_W, C.HOLE]),
-                    (web_y, [C.LANE_W] * 3), (C.HOLE_YS[40], [C.HOLE, C.LANE_W, C.HOLE, C.LANE_W, C.HOLE, C.LANE_W, C.HOLE])):
-        for z in (6.0, 20.0, 45.0, 70.0):
+    for y in (C.A_YS[3], C.B_YS[3], C.A_YS[18], web_y):
+        for z in (6.0, 20.0, 45.0):                           # below the slots' floor (48.4)
             _, gap = runs(axis_spans(tray, 0, y, z))
-            w_ = [C.LANE_W] * 3 if z < C.HOLE_BOTTOM else want      # below the holes' bottom the walls are solid
-            if not near(gap, w_):            # at a hole: the hole's 2.0 in each wall, the lane's width between
+            if not near(gap, [C.LANE_W] * 3):
                 smooth = False
-                fail("across x at y=%.2f z=%.1f the gaps are %s, want %s (a lane face is not smooth)"
-                     % (y, z, [round(g, 4) for g in gap], [round(g, 4) for g in w_]))
+                fail("across x at y=%.2f z=%.0f the lane widths are %s, want %.4f three times (a lane face is not smooth)"
+                     % (y, z, [round(g, 4) for g in gap], C.LANE_W))
     if smooth:
-        ok("the lane faces are smooth: %.4f wide at holes and between them, z = 6 to 70, below the slits" % C.LANE_W)
+        ok("the lane faces are smooth: %.4f wide at every height below the slots (z = 6 to 45), at slots and between" % C.LANE_W)
 
     print()
     print("=" * 72)
@@ -317,36 +334,38 @@ def main():
 
     print()
     print("=" * 72)
-    print("6. the lane walls, holes and slits")
+    print("6. the lane walls and slots")
     print("=" * 72)
-    bad = wall_problems(tray, "tray")
+    bad = slot_problems(tray, "tray")
     for m in bad:
         fail(m)
     if not bad:
-        ok("tray: four 5 mm walls, each with %d holes %.1f square at pitch %.1f (first %.1f, last %+.1f), "
-           "%.1f deep (bottom z=%.2f); every wall's top between holes z=%.4f"
-           % (C.HOLE_N, C.HOLE, C.HOLE_PITCH, C.HOLE_YS[0], C.HOLE_YS[-1], C.HOLE_DEPTH, C.HOLE_BOTTOM, C.WALL_TOP))
-        ok("slits: the top %.1f mm of the lane-side skin at every hole; partitions slit on both sides, liners on the lane "
-           "side only (the outer skin keeps its full height)" % C.SLIT_H)
+        ok("tray: six lane faces, each with its slots 2.0 wide at pitch %.1f: set A (lanes 1 and 3) %d from y=%.0f to %+.0f, set B (lane 2) %d from %.0f to %+.0f; "
+           "%.1f deep into the wall, floors at z=%.2f (%.0f below the wall top %.2f)"
+           % (C.SLOT_PITCH, C.N_A, C.A_YS[0], C.A_YS[-1], C.N_B, C.B_YS[0], C.B_YS[-1], C.SLOT_DEPTH, C.SLOT_FLOOR, C.SLOT_H, C.WALL_TOP))
+        ok("each wall keeps %.1f behind every slot and its full %.1f between them" % (C.SKIN, C.WALL_T))
+    tw = thinnest_partition(tray)
+    (ok if tw >= C.SKIN - TOL else fail)("staggered: the thinnest the partitions ever get, scanning every 0.25 mm of y, is %.3f (want %.1f)" % (tw, C.SKIN))
     sw = [axis_spans(tray, 2, cx, web_y) for cx in C.WALL_CENTRES_X]
     lw = [axis_spans(lid, 2, cx, web_y) for cx in C.WALL_CENTRES_X]
-    gapw = [lw[i][-1][0] - sw[i][0][1] if lw[i] and sw[i] else None for i in range(4)]
-    # the lid's wall is the topmost solid in its column; its bottom is the last span's start
     lbot = [lw[i][0][0] if lw[i] else None for i in range(4)]
+    (ok if all(sw[i] and abs(sw[i][0][1] - C.WALL_TOP) < TOL for i in range(4)) else fail)(
+        "tray: all four walls' tops are z = %s between slots" % [round(w[0][1], 4) if w else None for w in sw])
     (ok if all(b is not None and abs(b - C.LID_WALL_BOTTOM) < TOL for b in lbot) else fail)(
         "lid: all four walls hang to z = %s, %.2f over the lip's top plane" % ([round(b, 4) for b in lbot], C.DIV_GAP))
     (ok if all(abs(lbot[i] - sw[i][0][1] - 2 * C.DIV_GAP) < TOL for i in range(4)) else fail)(
         "where a tray wall meets a lid wall the gap is %.4f" % (lbot[0] - sw[0][0][1]))
-    for cx in C.WALL_CENTRES_X:                    # the lid's walls run front to back, unbroken, no holes
-        s = axis_spans(lid, 1, cx, 90.0)
-        if len(s) != 1 or abs((s[0][1] - s[0][0]) - 2 * C.EXT_HY) > TOL:
-            fail("lid wall at x=%+.2f: %d solid runs along y at z=90, want one front to back" % (cx, len(s)))
-    ok("lid: each wall is one unbroken run front to back (no holes in the lid)")
-    sol = [axis_spans(lid, 0, y, 90.0) for y in (C.HOLE_YS[0], C.HOLE_YS[20], C.HOLE_YS[50])]
-    (ok if all(len(s) == 4 for s in sol) else fail)("lid across x at three depths: always 4 runs (the same four walls everywhere)")
-    nohole = export(builder.build_bottom(holes=False), "tray-noholes")
-    wb = wall_problems(nohole, "tray")
-    (ok if len(wb) >= 12 else fail)("control: the tray built WITHOUT holes fails the hole test %d ways (the test can fail)" % len(wb))
+    for cx in C.WALL_CENTRES_X:                    # the lid's walls run front to back, unbroken
+        s_ = axis_spans(lid, 1, cx, 90.0)
+        if len(s_) != 1 or abs((s_[0][1] - s_[0][0]) - 2 * C.EXT_HY) > TOL:
+            fail("lid wall at x=%+.2f: %d solid runs along y at z=90, want one front to back" % (cx, len(s_)))
+    ok("lid: each wall is one unbroken run front to back (no slots in the lid)")
+    noslots = export(builder.build_bottom(slots_on=False), "tray-noslots")
+    wb = slot_problems(noslots, "tray")
+    (ok if len(wb) >= 12 else fail)("control: the tray built WITHOUT slots fails the slot test %d ways (the test can fail)" % len(wb))
+    unst = export(builder.build_bottom(stagger=False), "tray-unstaggered")
+    tu = thinnest_partition(unst)
+    (ok if tu < 0.1 else fail)("control: slots on both faces at the SAME positions cut the partitions through (thinnest %.3f): the stagger is needed" % tu)
 
     print()
     print("=" * 72)
@@ -456,120 +475,108 @@ def main():
 
     # ---- the divider, in the tray -------------------------------------------------
     print()
-    print("  the divider, standing in the tray (lane, hole): the arms in the holes, hung on the bridges")
-    hole_idx = {"first": 0, "middle": C.HOLE_N // 2, "last": C.HOLE_N - 1}
-    placements = [(0, "first"), (1, "middle"), (2, "last"), (0, "last"), (2, "first")]
+    print("  the divider, standing in the tray (lane, slot): the tabs in the slots, hung on their floors")
 
-    def place(dmesh, lane, hole):
-        return shift(dmesh, (C.LANE_CENTRES_X[lane], C.HOLE_YS[hole_idx[hole]], 0.0))
+    def set_of(lane):
+        return ("B", C.B_YS) if lane == 1 else ("A", C.A_YS)
 
-    def divider_problems(dmesh, label, lane, hole):
-        """Clearances and the seat, measured between the tray and a placed divider.  The
-        tray is windowed to the divider's neighbourhood so the ray casts stay quick."""
+    def fit_problems(dmesh, tray_mesh, label, lane, idx):
+        """Clearances and the hang, measured between the tray and a divider placed at slot `idx`
+        of lane `lane`.  The tray is windowed to the divider's neighbourhood so the ray casts
+        stay quick."""
         bad = []
-        d = place(dmesh, lane, hole)
-        cx, cy = C.LANE_CENTRES_X[lane], C.HOLE_YS[hole_idx[hole]]
-        tw = window(tray, cx - 46.0, cx + 46.0, *yband(cy))
-        lw = window(lid, cx - 46.0, cx + 46.0, *yband(cy))
-        # (a) nothing overlaps, in a fine grid over the whole divider footprint, tray and lid
-        grid = [(cx + (-1.0 + 2.0 * i / 150.0) * 38.9, cy + (-1.0 + 2.0 * j / 30.0) * 1.15 + 0.0097)
-                for i in range(151) for j in range(31)]
-        ot, at = col_overlap(tw, d, grid)
-        ol, al = col_overlap(lw, d, grid)
-        if ot > TOL:
-            bad.append("%s: the divider overlaps the tray by %.3f mm at x=%.2f y=%.2f" % (label, ot, at[0], at[1]))
+        which, ys = set_of(lane)
+        cx, cy = C.LANE_CENTRES_X[lane], ys[idx]
+        d = shift(dmesh, (cx, cy, 0.0))
+        tw = window(tray_mesh, cx - 46.0, cx + 46.0, *yband(cy, ys))
+        lw = window(lid, cx - 46.0, cx + 46.0, cy - 6.0, cy + 6.0)
+        # (a) no overlap with the tray, finely, across every tab's footprint
+        cols = []
+        for sgn in (-1, 1):
+            face = cx + sgn * C.LANE_W / 2.0
+            for i in range(0, 91):
+                for j in range(0, 25):
+                    cols.append((face - sgn * 1.0 + sgn * i * 0.05 + 0.0073, cy - 1.15 + j * 0.0958 + 0.0031))
+        o, at = col_overlap(tw, d, cols)
+        if o > TOL:
+            bad.append("%s: the divider overlaps the tray by %.3f mm at x=%.3f y=%.3f" % (label, o, at[0], at[1]))
+        gridl = [(cx + (-1.0 + 2.0 * i / 60.0) * 38.0, cy + (-1.0 + 2.0 * j / 8.0) * 1.1 + 0.0097) for i in range(61) for j in range(9)]
+        ol = col_overlap(lw, d, gridl)[0]
         if ol > TOL:
             bad.append("%s: the divider overlaps the lid by %.3f mm" % (label, ol))
-        # (b) lateral clearances at mid-arm height, along x through the middle of the divider
-        z = 40.0
-        sd = axis_spans(d, 0, cy, z)             # the divider's runs: left arm, body, right arm
-        st = axis_spans(tw, 0, cy, z)            # the tray's runs around it
-        if len(sd) != 3:
-            bad.append("%s: expected arm, body, arm along x at z=%.0f, found %d runs" % (label, z, len(sd)))
+        sd = axis_spans(d, 0, cy, ZS)
+        sb = axis_spans(tw, 0, cy, ZS)
+        if len(sd) != 1:
+            bad.append("%s: expected one run (body + tabs) along x at z=%.0f, found %d" % (label, ZS, len(sd)))
         else:
-            arm_l, body, arm_r = sd
-            for name, a, b in (("left arm", arm_l[0], arm_l[1]), ("right arm", arm_r[0], arm_r[1])):
-                lo_wall = max((s[1] for s in st if s[1] <= a + TOL), default=None)
-                hi_wall = min((s[0] for s in st if s[0] >= b - TOL), default=None)
-                if lo_wall is None or hi_wall is None:
-                    bad.append("%s %s: no wall found either side" % (label, name))
-                    continue
-                gap_out, gap_in = a - lo_wall, hi_wall - b
-                lane_side = gap_in if name == "left arm" else gap_out
-                far_side = gap_out if name == "left arm" else gap_in
-                # the arm's lane-side face is 0.1 from the hole wall (the skin is 1.5, the gap
-                # 1.6) and its outer face 0.3 from the far wall (the hole is 2.0, the arm 1.6)
-                if abs(lane_side - 0.1) > 0.011 or abs(far_side - 0.3) > 0.011:
-                    bad.append("%s %s: %.4f clear on the lane side (want 0.1) and %.4f on the far side (want 0.3)"
-                               % (label, name, lane_side, far_side))
-            bw = body[1] - body[0]
-            if abs(bw - 2 * C.DIV_BODY_HX) > TOL:
-                bad.append("%s: body is %.4f wide, want %.4f" % (label, bw, 2 * C.DIV_BODY_HX))
-            for side, edge, face in (("left", body[0], cx - C.LANE_W / 2.0), ("right", body[1], cx + C.LANE_W / 2.0)):
-                if abs(abs(edge - face) - C.BODY_CLEAR) > TOL:
-                    bad.append("%s: body %s edge is %.4f from the lane face, want %.2f" % (label, side, abs(edge - face), C.BODY_CLEAR))
-        # (c) the arm in its hole, across y
+            for sgn, tip in ((-1, sd[0][0]), (1, sd[0][1])):
+                # (b) the tab tip stops 0.3 short of the slot's bottom
+                bottom = max((r[1] for r in sb if r[1] <= tip + TOL), default=None) if sgn < 0 else \
+                    min((r[0] for r in sb if r[0] >= tip - TOL), default=None)
+                if bottom is None or abs(abs(bottom - tip) - C.TAB_GAP) > 0.011:
+                    bad.append("%s: the %s tab's tip is %s from the slot's bottom (want %.1f)" % (label, "left" if sgn < 0 else "right", "%.4f" % abs(bottom - tip) if bottom is not None else "?", C.TAB_GAP))
+        # (c) the tab in the slot, across y: 0.2 each side
         for sgn in (-1, 1):
-            ax_ = cx + sgn * (C.DIV_ARM_IN + C.ARM_W / 2.0)
-            sa = axis_spans(d, 1, ax_, z)
-            sh = axis_spans(tw, 1, ax_, z)
-            if len(sa) != 1:
-                bad.append("%s: arm at x=%+.2f: %d runs along y" % (label, ax_, len(sa)))
-            else:
-                before = max((s[1] for s in sh if s[1] <= sa[0][0] + TOL), default=None)
-                after = min((s[0] for s in sh if s[0] >= sa[0][1] - TOL), default=None)
-                if before is None or after is None or abs((sa[0][0] - before) - 0.2) > 0.011 or abs((after - sa[0][1]) - 0.2) > 0.011:
-                    bad.append("%s: arm at x=%+.2f has %.4f / %.4f clear in y (want 0.2 each)" % (label, ax_, sa[0][0] - before if before is not None else -1, after - sa[0][1] if after is not None else -1))
-        # (d) it hangs: the bridge's underside rests on the slit's floor, and the top is flush
-        for sgn in (-1, 1):
-            xb = cx + sgn * (C.LANE_W / 2.0 + C.SKIN / 2.0)       # over the lane-side skin
-            sdz = axis_spans(d, 2, xb, cy)
-            stz = axis_spans(tw, 2, xb, cy)
-            if not sdz or not stz:
-                bad.append("%s: no bridge/skin found at x=%+.2f" % (label, xb))
+            face = cx + sgn * C.LANE_W / 2.0
+            xm = face + sgn * 1.6
+            sdy, sby = axis_spans(d, 1, xm, ZS), axis_spans(tw, 1, xm, ZS)
+            if len(sdy) != 1:
+                bad.append("%s: tab at x=%+.2f: %d runs along y" % (label, xm, len(sdy)))
                 continue
-            seat = sdz[-1][0] - stz[-1][1]
-            top = sdz[-1][1]
-            if abs(seat) > TOL:
-                bad.append("%s: the bridge's underside is %.4f from the slit's floor (want it resting on it)" % (label, seat))
-            if abs(top - C.WALL_TOP) > TOL:
-                bad.append("%s: the bridge's top is z=%.4f, want flush with the wall top %.4f" % (label, top, C.WALL_TOP))
-        lo_, hi_ = bbox(d)
+            before = max((r[1] for r in sby if r[1] <= sdy[0][0] + TOL), default=None)
+            after = min((r[0] for r in sby if r[0] >= sdy[0][1] - TOL), default=None)
+            if before is None or after is None or abs((sdy[0][0] - before) - 0.2) > 0.011 or abs((after - sdy[0][1]) - 0.2) > 0.011:
+                bad.append("%s: the tab at x=%+.2f is %s / %s clear of the slot in y (want 0.2 each)"
+                           % (label, xm, "%.4f" % (sdy[0][0] - before) if before is not None else "?", "%.4f" % (after - sdy[0][1]) if after is not None else "?"))
+            # (d) it hangs: the tab's underside rests on the slot floor, its top is flush with the wall top
+            xz = face + sgn * 1.0
+            sdz, sbz = axis_spans(d, 2, xz, cy), axis_spans(tw, 2, xz, cy)
+            if not sdz or not sbz:
+                bad.append("%s: nothing found at x=%+.2f for the hang" % (label, xz))
+            else:
+                if abs(sdz[0][0] - sbz[0][1]) > TOL:
+                    bad.append("%s: the tab's underside is %.4f from the slot floor (want it resting on it)" % (label, sdz[0][0] - sbz[0][1]))
+                if abs(sdz[0][1] - C.WALL_TOP) > TOL:
+                    bad.append("%s: the tab's top is z=%.4f, want flush with the wall top %.4f" % (label, sdz[0][1], C.WALL_TOP))
+        # (e) the body is BODY_CLEAR off each lane face and clear of the floor
+        sdb, sbb = axis_spans(d, 0, cy, 30.0), axis_spans(tw, 0, cy, 30.0)
+        l_, r_ = sdb[0][0], sdb[0][1]
+        gl = l_ - max(r[1] for r in sbb if r[1] <= l_ + TOL)
+        gr = min(r[0] for r in sbb if r[0] >= r_ - TOL) - r_
+        if abs(gl - C.BODY_CLEAR) > TOL or abs(gr - C.BODY_CLEAR) > TOL:
+            bad.append("%s: the body is %.4f / %.4f off the lane faces (want %.1f)" % (label, gl, gr, C.BODY_CLEAR))
+        zb = axis_spans(d, 2, cx, cy)[0][0] - axis_spans(tw, 2, cx, cy)[0][1]
+        if abs(zb - C.DIV_FLOOR_CLEAR) > TOL:
+            bad.append("%s: the body's bottom is %.4f above the floor, want %.1f" % (label, zb, C.DIV_FLOOR_CLEAR))
+        hi_ = bbox(d)[1]
         if abs(hi_[2] - C.WALL_TOP - C.DIV_ABOVE) > TOL:
             bad.append("%s: the divider stands %.4f above the wall top, want %.1f" % (label, hi_[2] - C.WALL_TOP, C.DIV_ABOVE))
-        if abs(lo_[2] - (C.FLOOR_T + C.DIV_FLOOR_CLEAR)) > TOL:
-            bad.append("%s: the divider's bottom is z=%.4f, want %.4f (0.5 above the floor)" % (label, lo_[2], C.FLOOR_T + C.DIV_FLOOR_CLEAR))
         return bad
 
-    for lane, hole in placements:
-        bad = divider_problems(div, "lane %d hole %s" % (lane + 1, hole), lane, hole)
+    placements = [(0, 0), (0, C.N_A // 2), (0, C.N_A - 1), (1, 0), (1, C.N_B // 2), (1, C.N_B - 1), (2, 0), (2, C.N_A // 2), (2, C.N_A - 1)]
+    for lane, idx in placements:
+        which, ys = set_of(lane)
+        label = "lane %d slot %d of %d (set %s, y=%+.0f)" % (lane + 1, idx + 1, len(ys), which, ys[idx])
+        bad = fit_problems(div, tray, label, lane, idx)
         for m in bad:
             fail(m)
         if not bad:
-            ok("divider in lane %d at the %s hole (y=%+.1f): no overlap with tray or lid; arms 0.2 clear in y and 0.1/0.3 in x; "
-               "body 0.2 off each lane face; bridge rests on the slit floor, top flush; stands 12.0 above the wall; 12.65 under the ceiling"
-               % (lane + 1, hole, C.HOLE_YS[hole_idx[hole]]))
-    # controls: a divider whose slot cannot take the skin, and a tray without holes, must both be caught
-    tight = export(builder.build_divider(skin_gap=1.3), "divider-tight")
-    bt = divider_problems(tight, "tight", 1, "middle")
-    (ok if bt else fail)("control: a divider with a 1.3 slot (the skin is 1.5) is caught: %s" % (bt[0] if bt else "NOT CAUGHT"))
-    d = place(div, 1, "middle")
-    tw0 = window(nohole, -46.0, 46.0, *yband(0.0))
-    grid0 = [(-1.0 + 2.0 * i / 150.0) * 38.9 for i in range(151)]
-    ow = col_overlap(tw0, d, [(x, 0.0097) for x in grid0])[0]
-    (ok if ow > 5.0 else fail)("control: a tray WITHOUT holes against the divider overlaps by %.1f mm (the test can fail)" % ow)
+            ok("%s: no overlap with tray or lid; tabs 0.2 clear in y, tips 0.3 short of the slot bottom; body %.1f off both lane faces; "
+               "hangs on the slot floors, tops flush; body %.1f above the floor; stands 12.0 above the wall" % (label, C.BODY_CLEAR, C.DIV_FLOOR_CLEAR))
+    # controls: a divider whose tabs are too long for the slots, and a tray without slots, must both be caught
+    longtab = export(builder.build_divider(tab_reach=C.SLOT_DEPTH + 0.1), "divider-long-tab")
+    bt = fit_problems(longtab, tray, "long-tab", 1, C.N_B // 2)
+    (ok if bt else fail)("control: a divider whose tabs reach 3.6 (the slots are 3.5 deep) is caught: %s" % (bt[0] if bt else "NOT CAUGHT"))
+    bn = fit_problems(div, noslots, "no-slots", 1, C.N_B // 2)
+    (ok if bn else fail)("control: the same divider against a tray WITHOUT slots is caught: %s" % (bn[0] if bn else "NOT CAUGHT"))
 
-    # neighbours: lanes 1 and 2 at the SAME hole share the partition's hole and collide; one hole apart they do not
-    cx0 = C.LANE_CENTRES_X
-    a = shift(div, (cx0[0], C.HOLE_YS[20], 0.0))
-    b_same = shift(div, (cx0[1], C.HOLE_YS[20], 0.0))
-    b_next = shift(div, (cx0[1], C.HOLE_YS[21], 0.0))
-    cols_n = [(-38.2 + 1.6 * i / 40.0 + 0.0043, C.HOLE_YS[20] + (j - 20) * 0.1 + 0.0071) for i in range(41) for j in range(41)]
-    cols_n2 = [(x, y + 2.0) for x, y in cols_n] + [(x, y + 4.0) for x, y in cols_n]
-    o_same = col_overlap(a, b_same, cols_n)[0]
-    o_next = max(col_overlap(a, b_next, cols_n + cols_n2)[0], 0.0)
-    (ok if o_same > 0.5 else fail)("neighbouring lanes at the SAME hole collide in the shared hole by %.2f mm (the limit you expected)" % o_same)
-    (ok if o_next < TOL else fail)("...and one hole (4 mm) apart they do not: overlap %.4f" % o_next)
+    # neighbours: lane 1 at y=0 and lane 2 at y=+3 share the left partition, on opposite faces: no overlap, and the wall keeps its 1.5
+    d1 = shift(div, (C.LANE_CENTRES_X[0], 0.0, 0.0))
+    d2 = shift(div, (C.LANE_CENTRES_X[1], C.B_YS[C.N_B // 2], 0.0))
+    colsn = [(-C.LANE_W / 2.0 - C.WALL_T + 0.0073 + i * 0.05, -1.0 + j * 0.1) for i in range(0, 110) for j in range(0, 60)]
+    o12 = col_overlap(d1, d2, colsn)[0]
+    (ok if o12 < TOL else fail)("a lane 1 divider at y=0 and a lane 2 divider at y=%+.0f share the left partition, one tab on each face: no overlap between them (%.4f); "
+                                "dividers in lanes 1 and 3 may share any position" % (C.B_YS[C.N_B // 2], o12))
 
     print()
     print("=" * 72)

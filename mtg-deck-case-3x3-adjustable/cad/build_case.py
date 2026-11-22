@@ -9,12 +9,13 @@ See case_params.py for what the case is and why.  Built here that the 3 x 3 case
 
   * Four 5 mm LANE WALLS (two partitions, two liners) instead of 1.6 mm dividers, in
     the tray and, hanging down to meet them, in the lid.
-  * A column of 57 square HOLES in each wall and a SLIT over each, made by drawing ONE
-    hole and ONE slit in each of the four walls and repeating them with SolveSpace's
-    step-and-repeat (`Sketch.translate`): two sketches, two extrudes and two repeat
-    groups, not 456 drawn rectangles, and the pitch and the count stay editable in
-    the GUI.
-  * The DIVIDER: one flat profile, pinned point by point, extruded 1.6 mm.
+  * SLOTS in the lane faces: 25 mm deep, 2 mm wide, 3.5 mm into the wall, every 6 mm,
+    in two STAGGERED sets (lanes 1 and 3; lane 2, 3 mm along).  Each set is made by
+    drawing ONE slot per face and repeating it with SolveSpace's step-and-repeat
+    (`Sketch.translate`): two sketches, two extrudes and two repeat groups, and the pitch
+    and the count stay editable in the GUI.
+  * The DIVIDER: one flat profile (a body and two 25 mm tabs), pinned point by point,
+    extruded 1.6 mm.
 
 The group order is the build order, and it matters in the same way as before: every
 cut that a solid is meant to keep must come after the solid it cuts.  Scaffolding
@@ -198,41 +199,31 @@ def lane_wall_rects(S, g, wp, pad_to_x):
         rect_at(S, g, wp, mid, 0.0, hx, C.IN_HY + C.WALL_OVERLAP)
 
 
-def holes_and_slits(S, pt_cut):
-    """The holes and slits in the four lane walls: one of each drawn per wall, at the
-    first hole's y, then repeated HOLE_N times at the pitch.  `pt_cut` is a datum
-    OVER above the wall top, so each cutter starts in air."""
-    top_cut = C.OVER
-    # the holes: 2 x 2, centred in each wall, HOLE_DEPTH below the wall top
-    g, wp = S.workplane_group("holes-profile", pt_cut, XY_U, XY_V, visible=False)
-    for cx in C.WALL_CENTRES_X:
-        rect_at(S, g, wp, cx, C.HOLE_YS[0], C.HOLE / 2.0, C.HOLE / 2.0)
-    eg = _extrude_from(S, "hole-cut", g, C.HOLE_DEPTH + top_cut, DIFFERENCE, up=False)
-    S.translate("holes-repeat", eg, (0.0, C.HOLE_PITCH, 0.0), C.HOLE_N, DIFFERENCE)
-    # the slits: the top SLIT_H of the lane-side skin.  A partition is slit on BOTH
-    # sides (the whole wall width, since the hole is in the middle), so either neighbour
-    # can use it; a liner on its lane side only.  Each reaches 1 mm out into the lane, in
-    # air, so no cutter face lies in the wall's own face.
-    g, wp = S.workplane_group("slits-profile", pt_cut, XY_U, XY_V, visible=False)
-    for cx, kind in zip(C.WALL_CENTRES_X, C.WALL_KINDS):
-        hole_lo, hole_hi = cx - C.HOLE / 2.0, cx + C.HOLE / 2.0
-        if kind == "part":
-            lo, hi = cx - C.WALL_T / 2.0 - 1.0, cx + C.WALL_T / 2.0 + 1.0
-        elif kind == "liner-l":                     # the lane is on the right
-            lo, hi = hole_lo, cx + C.WALL_T / 2.0 + 1.0
-        else:                                       # the lane is on the left
-            lo, hi = cx - C.WALL_T / 2.0 - 1.0, hole_hi
-        rect_at(S, g, wp, (lo + hi) / 2.0, C.HOLE_YS[0], (hi - lo) / 2.0, C.SLIT_W / 2.0)
-    eg = _extrude_from(S, "slit-cut", g, C.SLIT_H + top_cut, DIFFERENCE, up=False)
-    S.translate("slits-repeat", eg, (0.0, C.HOLE_PITCH, 0.0), C.HOLE_N, DIFFERENCE)
+def slots(S, pt_cut, stagger=True):
+    """The slots in the lane faces: one drawn per face at the set's first y, then repeated
+    at the pitch, once for set A (lanes 1 and 3) and once for set B (lane 2).  `pt_cut` is
+    a datum OVER above the wall top, so each cutter starts in air.  Each slot cuts SLOT_DEPTH
+    into the wall and 1 mm out into the lane, in air, so no cutter face lies in the wall's
+    own face.  stagger=False puts set B at set A's positions, for the verification's
+    control: the partitions are then cut through."""
+    for name, ys in (("a", C.A_YS), ("b", C.B_YS if stagger else C.A_YS)):
+        g, wp = S.workplane_group("slots-%s-profile" % name, pt_cut, XY_U, XY_V, visible=False)
+        for face, into, which in C.SLOT_FACES:
+            if which.lower() != name:
+                continue
+            lo, hi = (face - 1.0, face + C.SLOT_DEPTH) if into > 0 else (face - C.SLOT_DEPTH, face + 1.0)
+            rect_at(S, g, wp, (lo + hi) / 2.0, ys[0], (hi - lo) / 2.0, C.SLOT_W / 2.0)
+        eg = _extrude_from(S, "slot-%s-cut" % name, g, C.SLOT_H + C.OVER, DIFFERENCE, up=False)
+        S.translate("slots-%s-repeat" % name, eg, (0.0, C.SLOT_PITCH, 0.0), len(ys), DIFFERENCE)
 
 
 # --------------------------------------------------------------------------
 # the tray
 # --------------------------------------------------------------------------
-def build_bottom(bumps=True, ledge=True, holes=True):
-    """bumps=False leaves out the snap domes, ledge=False the finger ledge, holes=False
-    the holes and slits: for the verification's controls."""
+def build_bottom(bumps=True, ledge=True, slots_on=True, stagger=True):
+    """bumps=False leaves out the snap domes, ledge=False the finger ledge, slots_on=False
+    the slots, stagger=False puts lane 2's slots at lanes 1 and 3's positions: for the
+    verification's controls."""
     S = Sketch()
     pt_seam, pt_lip, pt_floor, pt_wall, pt_base, pt_cut = datums(
         S, [(0.0, 0.0, C.Z_S), (0.0, 0.0, C.Z_LIP), (0.0, 0.0, C.FLOOR_T),
@@ -263,9 +254,9 @@ def build_bottom(bumps=True, ledge=True, holes=True):
     lane_wall_rects(S, g, wp, pad_to_x=1.0)
     _extrude_from(S, "lane-walls", g, C.WALL_TOP - C.WALL_BASE_Z, UNION, up=False)
 
-    # 5. the holes and slits
-    if holes:
-        holes_and_slits(S, pt_cut)
+    # 5. the slots
+    if slots_on:
+        slots(S, pt_cut, stagger)
 
     # 6. the snap domes
     if bumps:
@@ -322,36 +313,34 @@ def build_top(dimples=True, ledge=True):
 # --------------------------------------------------------------------------
 # the divider
 # --------------------------------------------------------------------------
-def divider_outline(skin_gap=None):
+def divider_outline(tab_reach=None):
     """The divider's profile in (x, z), counter-clockwise from the body's bottom left:
-    up the left edge of the body to the bridge's underside, out to the arm's lane-side
-    face, down the arm, across its foot, back up its outer face to the wall top, in along
-    the bridge's top to the body, up the body's edge to the top, and the mirror image.
-    `skin_gap` (default SKIN_GAP) is how far the arm's lane-side face is from the lane
-    face: a smaller value is a divider whose slot cannot take the skin, for a control."""
-    gap = C.SKIN_GAP if skin_gap is None else skin_gap
-    hw, lf = C.DIV_BODY_HX, C.LANE_W / 2.0
-    ai, ao = lf + gap, lf + gap + C.ARM_W
-    zb, zt, zk = C.DIV_BOTTOM, C.DIV_TOP, C.WALL_TOP
-    zbr, zar = C.DIV_BRIDGE_BOTTOM, C.DIV_ARM_BOTTOM
-    left = [(-hw, zb), (-hw, zbr), (-ai, zbr), (-ai, zar), (-ao, zar), (-ao, zk), (-hw, zk), (-hw, zt)]
-    right = [(hw, zt), (hw, zk), (ao, zk), (ao, zar), (ai, zar), (ai, zbr), (hw, zbr), (hw, zb)]
+    up the body's left edge to the tab's underside, out along it, up the tab's end to the
+    wall top, back in along the tab's top (flush with the wall top), up the body to its
+    top, and the mirror image.  `tab_reach` (default TAB_REACH) is how far a tab goes into
+    the wall from the lane face; a larger value is a tab that cannot fit the slot, for a
+    control."""
+    reach = C.TAB_REACH if tab_reach is None else tab_reach
+    hw, out = C.DIV_BODY_HX, C.LANE_W / 2.0 + reach
+    zb, zt, zk, zs = C.DIV_BOTTOM, C.DIV_TOP, C.WALL_TOP, C.DIV_TAB_BOTTOM
+    left = [(-hw, zb), (-hw, zs), (-out, zs), (-out, zk), (-hw, zk), (-hw, zt)]
+    right = [(hw, zt), (hw, zk), (out, zk), (out, zs), (hw, zs), (hw, zb)]
     return left + right
 
 
-def build_divider(skin_gap=None):
+def build_divider(tab_reach=None):
     """One divider, standing in the case frame at x = y = 0 (so it sits in the middle
-    lane at the middle hole).  The profile is drawn in the x-z plane and extruded
-    DIV_T, centred on y = 0.  Every vertex is pinned by two plane distances, which is
-    exactly as many equations as the polygon has unknowns (16 lines x 4 coordinates =
-    64; 16 joints x 2 = 32, and 32 pins), so 0 DOF and none redundant."""
+    lane).  The profile is drawn in the x-z plane and extruded DIV_T, centred on y = 0.
+    Every vertex is pinned by two plane distances: 12 lines x 4 coordinates = 48 unknowns,
+    12 joints x 2 = 24 equations and 24 pins, so 0 DOF and none redundant."""
     S = Sketch()
     (pt_o,) = datums(S, [(0.0, 0.0, 0.0)])
     g, wp = S.workplane_group("divider-profile", pt_o, (1.0, 0.0, 0.0), (0.0, 0.0, 1.0), visible=False)
-    pts = divider_outline(skin_gap)
-    lines = [S.line(g, wp, pts[i], pts[(i + 1) % len(pts)]) for i in range(len(pts))]
-    for i in range(len(pts)):
-        S.constraint(POINTS_COINCIDENT, g, wp, ptA=lines[i][2], ptB=lines[(i + 1) % len(pts)][1])
+    pts = divider_outline(tab_reach)
+    n = len(pts)
+    lines = [S.line(g, wp, pts[i], pts[(i + 1) % n]) for i in range(n)]
+    for i in range(n):
+        S.constraint(POINTS_COINCIDENT, g, wp, ptA=lines[i][2], ptB=lines[(i + 1) % n][1])
         x, z = pts[i]
         S.constraint(PT_PLANE_DISTANCE, g, wp, valA=x, ptA=lines[i][1], entityA=ENT_YZ_WORKPLANE)
         S.constraint(PT_PLANE_DISTANCE, g, wp, valA=z, ptA=lines[i][1], entityA=ENT_XY_WORKPLANE)

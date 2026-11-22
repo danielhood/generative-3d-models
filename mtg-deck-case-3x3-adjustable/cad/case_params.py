@@ -9,15 +9,19 @@ ledge, are all reused, and all of those printed well.  What is new is inside.
 
   * Four 5 mm LANE WALLS run front to back: two partitions between the lanes and a
     LINER against each outer wall.  (The outer walls carry the snap lip, which is
-    1.85 mm thick and cannot hold a hole, so the liner sits inside it and the outer
+    1.85 mm thick and cannot hold a slot, so the liner sits inside it and the outer
     shell stays exactly as it was.)
-  * Each lane wall has a column of vertical square HOLES in its middle, at a fixed
-    pitch, and over each hole a SLIT through the lane-side skin, 3 mm deep.  The
-    lane faces stay smooth below the slits.
-  * The DIVIDER is a flat 1.6 mm plate with a BRIDGE and an ARM at each top corner:
-    the arm goes down the hole, the bridge fills the slit and rests on the skin, and
-    the 1.6 mm slot between arm and body takes the 1.5 mm skin.  It hangs from its
-    bridges, vertical, with its top 12 mm above the walls.
+  * Each lane wall has vertical SLOTS cut into its lane faces, 25 mm deep from the wall
+    top, 2 mm wide, 3.5 mm into the wall, every 6 mm.  Below the slots the lane faces
+    are smooth.
+  * The two faces of a partition are STAGGERED: lane 2's slots are 3 mm along from
+    lanes 1 and 3's, so a 5 mm wall keeps 1.5 mm behind every slot (3.5 + 3.5 mm from
+    both faces at one position would cut it through).
+  * The DIVIDER is a flat 1.6 mm plate with a 25 mm TAB at each top corner.  Each tab
+    slides down a slot and the divider hangs on its tab bottoms, vertical, with its top
+    12 mm above the walls.  (An earlier design held it by arms in square holes; the
+    printed test found the arms tight and flexible and the base very slow to print, and
+    the tabs alone fitted well.  That design is in `archive/holes-and-arms/`.)
 
 Frame (the same as the single box and the 3 x 3 case): x and y centred on the case's
 axis, z = 0 at the underside of the tray.  x is the width (across the lanes), y the
@@ -99,40 +103,52 @@ WALL_BASE_Z = 1.0                    # lane walls start inside the floor
 WALL_OVERLAP = 1.0                   # how far a wall runs into the outer wall, front and back
 OVER = 2.0                           # how far a cutter reaches past a part, where it does not matter
 
-# ---- the holes and slits ------------------------------------------------------
-HOLE = 2.0                           # square, centred in the wall
-SKIN = (WALL_T - HOLE) / 2.0         # 1.5: the wall either side of a hole
-HOLE_PITCH = 4.0                     # centre to centre along y
-HOLE_DEPTH = 60.0                    # from the wall top
-SLIT_H = 3.0                         # the slit is the top 3 mm of the lane-side skin
-SLIT_W = HOLE                        # along y, the same as the hole
-HOLE_MARGIN = 2.0                    # the end holes stay this far from the front/back walls
-HOLE_N = int((2 * IN_HY - 2 * HOLE_MARGIN - HOLE) // HOLE_PITCH) + 1     # 57
-HOLE_Y0 = -(HOLE_N - 1) / 2.0 * HOLE_PITCH                               # -112.0: symmetric
-HOLE_YS = [HOLE_Y0 + k * HOLE_PITCH for k in range(HOLE_N)]
-assert HOLE_Y0 - HOLE / 2.0 > -IN_HY + HOLE_MARGIN - 1e-9
-HOLE_BOTTOM = WALL_TOP - HOLE_DEPTH               # 13.4
+# ---- the slots ------------------------------------------------------------------
+SLOT_W = 2.0                         # along y
+SLOT_DEPTH = 3.5                     # into the wall from the lane face: leaves 1.5 of a 5 mm wall
+SLOT_H = 25.0                        # from the wall top down
+SLOT_PITCH = 6.0                     # positions along y
+STAGGER = SLOT_PITCH / 2.0           # lane 2's slots (set B) are this far along from set A
+SKIN = WALL_T - SLOT_DEPTH           # 1.5: what is left of the wall at a slot
+SLOT_FLOOR = WALL_TOP - SLOT_H       # 48.4: the slots' bottom, where a tab rests
+SLOT_MARGIN = 2.0                    # the end slots stay this far from the front/back walls
+# Set A (lanes 1 and 3) is symmetric about y = 0 with a slot AT 0; set B (lane 2) has one
+# more, centred between: so B = A shifted by half a pitch and extended by one.
+N_A = int((2 * IN_HY - 2 * SLOT_MARGIN - SLOT_W) // SLOT_PITCH)
+if N_A % 2 == 0:
+    N_A -= 1                         # odd, so there is a slot at y = 0
+N_B = N_A + 1
+A_YS = [(k - (N_A - 1) / 2.0) * SLOT_PITCH for k in range(N_A)]              # -108 .. +108 (37)
+B_YS = [(k - (N_B - 1) / 2.0) * SLOT_PITCH for k in range(N_B)]              # -111 .. +111 (38)
+assert B_YS[-1] + SLOT_W / 2.0 <= IN_HY - SLOT_MARGIN + 1e-9
+# the six lane faces that carry slots: (x of the face, which way the wall lies from it: +1
+# towards +x, -1 towards -x, which set).  Lanes 1 and 3 use set A, lane 2 set B.
+SLOT_FACES = [
+    (-IN_HX + WALL_T, -1, "A"),                       # the left liner, its lane-1 face
+    (-LANE_W / 2.0 - WALL_T, +1, "A"),                # the left partition, its lane-1 face
+    (-LANE_W / 2.0, -1, "B"),                         # the left partition, its lane-2 face
+    (LANE_W / 2.0, +1, "B"),                          # the right partition, its lane-2 face
+    (LANE_W / 2.0 + WALL_T, -1, "A"),                 # the right partition, its lane-3 face
+    (IN_HX - WALL_T, +1, "A"),                        # the right liner, its lane-3 face
+]
 
 # ---- the divider ---------------------------------------------------------------
-DIV_T = 1.6                          # plate thickness, y
-ARM_W = 1.6                          # arm width, x (and its thickness, y: the same extrude)
-ARM_LEN = 58.0                       # from the wall top: 2 mm short of the hole's bottom
-BRIDGE_H = SLIT_H                    # fills the slit exactly, so the top is flush and it hangs
-SKIN_GAP = 1.6                       # lane face to the arm's lane-side face: holds the 1.5 skin
-BODY_CLEAR = 0.2                     # the body is this much narrower than the lane, per side
+DIV_T = 1.6                          # plate and tab thickness (y)
+TAB_REACH = 3.2                      # how far a tab goes into the wall from the lane face
+TAB_GAP = SLOT_DEPTH - TAB_REACH     # 0.3: the tab stops short of the slot's bottom
+TAB_H = SLOT_H                       # the tab is as tall as the slot: it hangs on its bottom
+BODY_CLEAR = 0.8                     # the body is this much narrower than the lane, per side (0.2, then 0.4 in the
+                                     # slot test; 0.8 here, with the tabs 0.4 longer so they still reach 3.2 into the wall)
 DIV_ABOVE = 12.0                     # the body stands this far above the wall top
-DIV_FLOOR_CLEAR = 0.5                # the body's bottom is this far above the floor
+DIV_FLOOR_CLEAR = 0.8                # the body's bottom is this far above the floor (0.5 in the slot test's design)
 DIV_BODY_HX = LANE_W / 2.0 - BODY_CLEAR
-DIV_ARM_IN = LANE_W / 2.0 + SKIN_GAP          # the arm's lane-side face, from the lane's axis
-DIV_ARM_OUT = DIV_ARM_IN + ARM_W
+DIV_TAB_OUT = LANE_W / 2.0 + TAB_REACH
 DIV_BOTTOM = FLOOR_T + DIV_FLOOR_CLEAR
 DIV_TOP = WALL_TOP + DIV_ABOVE
-DIV_BRIDGE_BOTTOM = WALL_TOP - BRIDGE_H
-DIV_ARM_BOTTOM = WALL_TOP - ARM_LEN
-assert ARM_LEN < HOLE_DEPTH
-assert DIV_ARM_IN > LANE_W / 2.0 + SKIN                   # the arm clears the skin ...
-assert DIV_ARM_OUT < LANE_W / 2.0 + SKIN + HOLE           # ... and stays inside the hole
-assert DIV_TOP < Z_CEIL                                   # ... and the lid clears the divider
+DIV_TAB_BOTTOM = WALL_TOP - TAB_H
+assert TAB_GAP > 0 and SKIN > 0
+assert DIV_TOP < Z_CEIL                                   # the lid clears the divider
+assert DIV_TAB_BOTTOM > DIV_BOTTOM                        # the tabs are on the upper part of the body
 
 # ---- the snap domes and dimples: the 3 x 3 case's, centred on the lanes -------
 BUMP_H, BUMP_SPHERE_R = B.BUMP_H, B.BUMP_SPHERE_R

@@ -6,14 +6,14 @@ divider), and `.stl` exports beside them
 Parameters: `cad/case_params.py`  ·  Verification: `cad/check_case.py`
 Source: the 3 x 3 case, `../mtg-deck-case-3x3/` (its spec: `deck_case_3x3_spec.md`), and
 through it the single deck box, `../mtg-deck-boxes/`
-Revision: rev A, 2026-11-17
-Status: **modelled and mesh-verified; not printed.** The outer shell is the 3 x 3 case's,
-which printed well in PLA with its finger ledges; the lane walls, holes, slits and dividers
-are new and untested on a printer.
+Revision: rev B, 2026-11-22 (rev A, the holes-and-arms design, is in `archive/holes-and-arms/`); body clearance raised from 0.4 to 0.8 mm per side after rev B, see section 7
+Status: **modelled and mesh-verified. The divider and the slots were test-printed and fitted well;
+the full tray in this design is not printed.** The outer shell is the 3 x 3 case's, which printed
+well in PLA with its finger ledges.
 
-A case whose three lanes run the full depth, with movable dividers that hang in holes
-in the lane walls. It is the 3 x 3 case with the inside rethought; the outside is
-unchanged, so the lock, the finger ledge and the cards' fit carry over.
+A case whose three lanes run the full depth, with movable dividers that hang by tabs in slots in
+the lane walls. It is the 3 x 3 case with the inside rethought; the outside is unchanged, so the
+lock, the finger ledge and the cards' fit carry over.
 
 ---
 
@@ -21,40 +21,53 @@ unchanged, so the lock, the finger ledge and the cards' fit carry over.
 
 | # | Requirement | Result (measured off the exported meshes) |
 |---|---|---|
-| R1 | Three sections running front to back, movable dividers placeable in any of them, giving sections of variable size | three lanes of 69.9992 x 232.6976; 57 divider positions along each, 4 mm apart |
-| R2 | Dividers stay vertical, so cards cannot slide or tilt | arms 0.2 mm clear in a 2 mm hole, 58 mm long in 60 mm holes, on both sides of the lane |
-| R3 | Lane walls stay smooth; the holding mechanism must not interrupt them | the lane faces measure 69.9992 across at every hole and between holes, z = 6 to 70, below the slits; the only break is the top 3 mm (R6) |
+| R1 | Three sections running front to back, movable dividers placeable in any of them, giving sections of variable size | three lanes of 69.9992 x 232.6976; 37 divider positions in lanes 1 and 3, 38 in lane 2, 6 mm apart |
+| R2 | Dividers stay vertical, so cards cannot slide or tilt | 25 mm tabs, 0.2 mm clear in 2.0 slots, on both sides of the lane: about 0.5 degrees of lean |
+| R3 | Lane walls stay smooth; the holding mechanism must not interrupt them | the lane faces measure 69.9992 across at every height below the slots, at a slot's y and between; the only break is the top 25 mm (R6) |
 | R4 | Walls running front to back widened to 5 mm | four 5.000 walls: two partitions, two liners |
-| R5 | In the middle of each, vertical 2 x 2 mm square holes, 4 mm apart | 57 per wall, 2.000 square, centres -112 .. +112 at pitch 4.000, centred in the wall |
-| R6 | Slits beside each hole so the divider drops in, its top flush with the wall tops | the top 3.000 mm of the lane-side skin cut away at every hole; the bridge fills it, top at 73.4034 = the wall top |
-| R7 | Divider 1.6 mm thick, arms 1.6 wide, 1.6 space between each arm and the body | plate 1.600, arms 1.600; the slot is 1.8 from the body: see D3 |
+| R5 | A way to hold a divider vertical at any of many positions | vertical slots in the lane faces, 2.0 wide, 3.5 into the wall, 25 deep, every 6.0 mm |
+| R6 | The divider's top flush with the wall top, so the lid's walls meet | the tabs' top is at 73.4034 = the wall top; the lid's walls hang to 73.7034 |
+| R7 | Divider 1.6 mm thick; slot and divider thickness as already fitted | plate and tabs 1.600; slots 2.000 |
 | R8 | The body continues 12 mm above the walls | 12.000 above the wall top; 12.65 under the lid's ceiling |
-| R9 | The lid adjusted for the extra width | four 5 mm walls hang from the lid's ceiling to meet the tray's, 0.30 mm gap |
+| R9 | The lid adjusted for the extra width | four 5 mm walls hang from the lid's ceiling to meet the tray's, 0.30 mm gap. Unchanged by the slots |
 | R10 | Within the printer bed | **238.233 x 245.260** mm, margins 11.8 and 4.7 |
 | R11 | Domes, dimples, finger ledge unchanged | the 3 x 3 case's: 12 domes, 12 dimples, ledge 3 mm proud, 2 mm thick |
 | R12 | One divider modelled; cloned in the slicer | `deck_case_adjustable_divider.slvs` |
+| R13 | Shorter print time than the first design | the depth of small features falls about 60% (5,600 mm of slot depth, 13,700 of hole depth). Not measured in hours |
 
 ---
 
-## 2. What was settled, and how
+## 2. History: why the design changed
 
-Each was decided with the user before the build; the sketches that fixed them are in
-the conversation.
+Rev A held the divider by **arms** in 60 mm deep square holes, with 3 mm slits and 4 mm pitch (archived in
+`archive/holes-and-arms/`). A printed test of one divider and the base (2026-11-19) found:
+
+* the arms had to be pushed into the holes with force, and were flexible at 1.6 mm;
+* the divider's body could bind between the slots;
+* the base took about 24 hours to print, because of the holes over most of the height of the walls;
+* but the dividers **slotted in nicely** between the slits by their tabs alone, with the arms removed.
+
+The user proposed removing the holes and arms and extending the slits to 25 mm (and the tabs with them), the body
+0.4 mm narrower each side, and a 6 mm pitch, keeping the slot width and tab thickness. A short single-lane test base
+and the new divider were built and printed (`archive/slot-test/`) and the test was good (2026-11-22). This revision
+applies it to the full tray.
+
+## 3. What was settled, and how
+
+Decided with the user before the build, from the sketches in the conversation.
 
 | # | Question | Answer |
 |---|---|---|
-| Q1 | What is the "1.6 mm space between arm and body"? | The gap that **straddles the wall's 1.5 mm skin**: the body stays in the lane, the arm is in the hole, and the skin sits between them. The two numbers only fit under this reading |
-| Q2 | The outer lanes' outer walls carry the 1.85 mm snap lip, which cannot hold a hole | **Liner walls**: a 5 mm slotted wall inside each outer wall (the user's option A). The outer shell stays exactly as printed |
-| Q3 | Hole depth and arm length | holes 60 deep; arms 58 long (2 mm short of the bottom) |
-| Q4 | Neighbouring lanes' dividers at the same position | cannot, by design: the shared hole is 2 mm and two arms do not fit |
-| Q5 | The slits break the smooth face | accepted: the face is smooth below them, and the lanes' tops are open |
-| Q6 | Interior depth | unchanged from the 3 x 3 case, 232.6976 |
-| Q7 | The slot's width | 1.8 from the body: the body is 0.2 narrower than the lane, so 1.6 + 0.2 |
-| Q8 | How the divider sits | it hangs on its bridges; the body ends 0.5 above the floor |
+| Q1 | The outer lanes' outer walls carry the 1.85 mm snap lip, which cannot hold a slot | **Liner walls** (kept from rev A): a 5 mm slotted wall inside each outer wall. The outer shell stays exactly as printed |
+| Q2 | Slots on both faces of a 5 mm wall at the same position would cut it through at 3.5 deep | **Stagger**: lane 2's slots are half a pitch (3 mm) along from lanes 1 and 3's |
+| Q3 | Slot depth into the wall, and the tab | slots 3.5 deep leaving 1.5; the tab reaches 3.2, stopping 0.3 short of the bottom |
+| Q4 | Tab height | 25, equal to the slot depth, so the divider hangs on its tab bottoms, top flush |
+| Q5 | Slot positions | 37 for lanes 1 and 3 (y = -108 .. +108, one at 0); 38 for lane 2 (y = -111 .. +111) |
+| Q6 | The slot-test base | only the middle lane; no front or back wall; a 1 mm floor; 6 slots |
 
 ---
 
-## 3. Dimensions
+## 4. Dimensions
 
 | | |
 |---|---|
@@ -64,137 +77,101 @@ the conversation.
 | exterior | **238.2328 x 242.2600**, plus the ledge: 238.2328 x 245.2600 |
 | tray | 73.5534 tall; lid 34.4966; card space 94.05 (all as the 3 x 3 case) |
 | wall tops | tray 73.4034; lid walls hang to 73.7034 |
-| holes | 2.0 x 2.0, 60.0 deep (bottom z = 13.4034), 57 per wall, y = -112 + 4k |
-| slits | top 3.0 of the lane-side skin, 2.0 wide along y; partitions both sides, liners lane side |
-| divider | body 69.5992 x 1.6 (x by y), z = 4.5 .. 85.4034; arms 1.6 wide, z = 15.4034 .. 73.4034; bridges z = 70.4034 .. 73.4034; 76.3992 wide overall |
+| slots | 2.0 wide (y), 3.5 into the wall, from z = 48.4034 to the top; set A 37 at y = -108 + 6k, set B 38 at y = -111 + 6k |
+| faces | A on the liners' and partitions' faces towards lanes 1 and 3; B on the partitions' faces towards lane 2 |
+| divider | body 68.3992 x 1.6 (x by y), z = 4.8 .. 85.4034; tabs 4.0 out from the body, z = 48.4034 .. 73.4034; 76.3992 wide over the tabs |
 | snap domes | at z = 70.2105: front/back at x = -74.999, 0, +74.999; sides at y = -78.099, 0, +78.099 |
 
 ---
 
-## 4. Decisions
+## 5. Decisions
 
-**D1 — The shell is not touched.** The outer wall, lip, groove, clearances, domes,
-dimples, mouth bevel and finger ledge are the 3 x 3 case's, imported or copied
-unchanged, because the 3 x 3 case printed with a lock "neither too tight nor too
-loose". Every check on them is the 3 x 3 case's check, with the same numbers.
+**D1 — The shell is not touched.** The outer wall, lip, groove, clearances, domes, dimples, mouth bevel and
+finger ledge are the 3 x 3 case's, imported or copied unchanged. The lid's `.slvs` is byte for byte what it was in
+rev A, so its STL was not regenerated.
 
-**D2 — Liners, not thicker outer walls.** The lip is the inner 1.85 mm of the outer
-wall above the seam; a 2 mm hole and a slit cannot pass through it without cutting the
-lock. A liner against the cavity wall gives the outer lanes the same 5 mm slotted wall
-as the partitions, at the cost of 10 mm of width, and leaves the lock alone. A liner
-also runs 1 mm into the outer wall, so it joins by overlap rather than by sharing the
-cavity wall's plane.
+**D2 — Liners, not thicker outer walls.** (Unchanged from rev A.) The lip is the inner 1.85 mm of the outer wall
+above the seam; a slot cannot be cut into it without cutting the lock. A liner against the cavity wall gives the outer
+lanes the same 5 mm slotted wall as the partitions, at the cost of 10 mm of width, and leaves the lock alone. A liner
+also runs 1 mm into the outer wall, so it joins by overlap rather than by sharing the cavity wall's plane.
 
-**D3 — The divider's slot is 1.8 from the body, not 1.6.** The arm's lane-side face is
-1.6 from the *lane face* (so 0.1 clear of the 1.5 mm skin), and the body is 0.2 inside
-the lane face on each side so it cannot jam. Measured from the body the slot is
-therefore 1.8. Cutting it 1.6 from the body would leave 1.4 mm for a 1.5 mm skin.
+**D3 — Staggered slots.** A partition's two faces carry different sets: set A (lanes 1 and 3) at multiples of 6, set B
+(lane 2) 3 mm along. Their y ranges ([6m-1, 6m+1] and [6m+2, 6m+4]) never overlap, leaving a 1 mm full-thickness web
+between neighbours, so the wall is 1.5 mm at the thinnest, anywhere. Without the stagger the partitions are cut through
+(measured: thinnest 0.000). A side effect: dividers in neighbouring lanes can never share a position, and can be 3 mm
+apart, where the first design forced a 4 mm stagger.
 
-**D4 — A hanging divider, one flat profile.** The divider is a single polygon in the
-x-z plane, extruded 1.6, so the plate, arms and bridges are one extrude and print as
-one flat piece. The bridge is exactly as tall as the slit (3 mm), so its underside rests
-on the skin under the slit and its top is flush with the wall top; the divider hangs from
-its two bridges, and the arms only keep it vertical. The profile is 16 lines pinned
-vertex by vertex (two plane distances each): 64 unknowns, 64 equations, 0 DOF.
+**D4 — A hanging divider, one flat profile.** The divider is a single polygon in the x-z plane, extruded 1.6, so the
+plate and tabs are one extrude and print as one flat piece. Its tab bottoms rest on the slots' floors and its tops are
+flush with the wall tops; the divider hangs from them, and the slots keep it vertical. The profile is 12 lines pinned
+vertex by vertex (two plane distances each): 48 unknowns, 48 equations, 0 DOF.
 
-**D5 — The holes are drawn once and repeated.** One 2 x 2 hole per wall (four in one
-sketch), extruded as a cutter, then SolveSpace's "step translating" repeats it 57 times;
-likewise one slit per wall. 456 holes and slits cost two sketches, two extrudes and two
-repeat groups, and the pitch and count are editable in the GUI. The writer gained
-`Sketch.translate`. **Found by measuring** (and pinned by `utilities/selftest.py`): the
-group stores *half* the step, as an extrude stores half its length, and the count
-*includes* the original. A stored 4.0 gave holes 8 apart.
+**D5 — The slots are drawn once and repeated.** One slot per face (four faces of set A in one sketch, two of set B in
+another), extruded as a cutter, then SolveSpace's "step translating" repeats each set 37 or 38 times
+(`Sketch.translate`; the count includes the original and the group stores half the step, both pinned by
+`utilities/selftest.py`). 224 slots cost two sketches, two extrudes and two repeat groups, and the pitch and count are
+editable in the GUI.
 
-**D6 — The slit is wider than the lane face, in air.** Each slit cutter reaches 1 mm past
-the lane face into the lane, so no cutter face lies in the wall's own face (the same
-coplanar-face rule as D3 of the 3 x 3 spec). A partition's slit cuts its whole 5 mm
-width across the hole (the hole is in the middle, so that is hole plus both skins), so
-either neighbour can use it.
+**D6 — Each slot reaches 1 mm into the lane, in air.** So no cutter face lies in the wall's own face (the coplanar-face
+rule of D3 in the 3 x 3 spec).
 
-**D7 — Hole positions are symmetric about y = 0.** 57 holes at pitch 4, the end holes
-at least 2 mm from the front and back walls (they are 3.35). Hole 28 is at y = 0.
+**D7 — Slot positions are symmetric about y = 0.** Set A has an odd count (37), so there is a slot at y = 0; set B has
+one more, centred between. The end slots are 7.3 mm (A) and 4.35 mm (B) from the front and back walls.
 
 ---
 
-## 5. Verification
+## 6. Verification
 
-`python3 cad/check_case.py` (about a minute) exports all three and measures the meshes.
-**All checks pass.**
+`python3 cad/check_case.py` (under a minute) exports all three and measures the meshes. **All checks pass.**
 
 * every sketch group of all three parts is 0 DOF, 0 redundant;
-* each part is one watertight shell (tray 12 914 triangles, 774 433 mm^3; lid 4 714,
-  461 126; divider 60, 9 324);
+* each part is one watertight shell (tray 8 290 triangles, 793 031 mm^3; lid 4 714, 461 126; divider 44, 9 246);
 * footprint, lanes, walls, lip, groove, clearances, heights, card space as in 1;
-* all four lane walls: 57 holes each, 2.000 wide, centres at -112 + 4k to 0.001,
-  bottoms at z = 13.4034, tops between holes at 73.4034; slits on exactly the right skins
-  at 70.4034 (partitions both sides, liners the lane side only, outer skin full height);
-* lane faces smooth: 69.9992 across at holes and between them, z = 6 to 70;
-* the lid: four walls hanging to 73.7034, 0.30 over the tray's, each one unbroken front
-  to back;
-* 12 domes and 12 dimples measure to their design, three per face and no others;
-* both ledges, 17 stations each;
-* tray and lid overlap nowhere over 2 280 columns; the domes seat in the dimples with the
-  same 0.025 / 0.091 apex gaps as the 3 x 3 case;
-* **the divider, placed in lanes 1, 2 and 3 at the first, middle and last holes**: no
-  overlap with the tray or lid over a fine grid, arms 0.200 clear in y, 0.1 / 0.3 in x,
-  body 0.2 off each lane face, bridge resting on the slit floor with its top at the wall
-  top, 12.000 above the wall, bottom 0.5 above the floor;
-* neighbouring lanes' dividers collide at the same hole (58 mm of overlap in the shared
-  hole) and clear one hole (4 mm) apart;
+* all six lane faces' slots: positions to 0.001, 2.000 wide, floors at z = 48.4034, the wall top between slots at
+  73.4034; each wall keeps 1.500 behind a slot and its full 5.000 between; the partitions are never thinner than 1.500
+  scanning every 0.25 mm of y;
+* lane faces smooth: 69.9992 across, z = 6 to 45, at slots and between;
+* the lid: four walls hanging to 73.7034, 0.30 over the tray's, each one unbroken front to back;
+* 12 domes and 12 dimples measure to their design; both ledges, 17 stations each;
+* tray and lid overlap nowhere over 2 280 columns; the domes seat in the dimples with the same 0.025 / 0.091 apex gaps
+  as the 3 x 3 case;
+* **the divider, placed in lanes 1, 2 and 3 at the first, middle and last slots**: no overlap with the tray or lid, tabs
+  0.200 clear in y, tips 0.300 short of the slot bottom, body 0.800 off each lane face, tab bottoms resting on the slot
+  floors, tops flush, body 0.8 above the floor, 12.000 above the wall;
+* a lane 1 divider at y = 0 and a lane 2 divider at y = +3 share the left partition, one tab on each face, without
+  overlap;
 * the committed STLs match a fresh export of their `.slvs`.
 
-**Controls that must fail, and do:** a tray without holes fails the hole test 18 ways; a
-tray without the ledge, and a lid without it, fail the ledge test 17 ways each; a lid
-without dimples overlaps the domes by 2.54 mm; a divider with a 1.3 slot is caught as
-overlapping the tray by 55 mm; a tray without holes overlaps a divider by 58 mm; the
-tray's STL checked as the lid's fails.
+**Controls that must fail, and do:** a tray without slots fails the slot test 18 ways; slots on both faces at the same
+positions cut the partitions through (thinnest 0.000); a divider with 3.6 mm tabs overlaps the tray by 25 mm; the same
+divider against a tray without slots overlaps by 25 mm; a lid without dimples overlaps the domes by 2.54 mm; a tray
+and a lid without the ledge fail the ledge test 17 ways each; the tray's STL checked as the lid's fails.
 
-`utilities/slvs_check.py` on all three: the mesh is one shell; the constraints survive a
-reload (tray 388 -> 388, lid 309 -> 309, divider 51 -> 51); every sketch is restored
-after perturbing ~540 / 430 / 67 parameters by up to 0.3 mm, **except** one seed of five
-on the tray at 0.3 mm. That is the lip's 0.55 mm corner radius (the same rounded
-rectangle the single box and 3 x 3 case use) flipping to its other valid solution when
-its parameters move by more than half its radius; `slvs_check.py` documents this. It
-restores on all six seeds at 0.15 mm, the lip group alone reproduces it, and
-`dof_report` says 0 DOF. Not a missing constraint.
-
-### Two bugs in the check itself, worth remembering
-
-* **A ray cast along an axis needs air at both ends of its window.** The divider checks
-  cut the tray down to a window near the divider so the ray casts run quickly. A window
-  that cut a 2 mm web in half left an unmatched hit, which flipped the in/out parity of
-  every later hit on the ray and silently lost every span. The fix: windows whose edges
-  are hole centres (air), opened out past the front and back walls near the ends.
-* **A smoothness test compared the wrong thing**: across x at a hole, the gaps include the
-  hole's 2.0 in each wall as well as the three lanes, and below the holes' bottom they
-  do not. It now states both expectations.
+`utilities/slvs_check.py` on all three: one shell each; constraints survive a reload (tray 364 -> 364, lid 309 -> 309,
+divider 39 -> 39); every sketch is restored after perturbing by up to 0.15 mm on all six seeds. At 0.3 mm one of five
+seeds on the tray does not restore: the lip's 0.55 mm corner radius flipping to its other valid solution (the caveat in
+`slvs_check.py`); `dof_report` says 0 DOF.
 
 ---
 
-## 6. Open items and risks
+## 7. Open items and risks
 
-* **Not printed.** The whole of what is new rests on mesh verification.
-* **The fits are tight for FDM.** An arm has 0.2 mm clear in y, 0.1 mm beside the skin
-  and 0.3 mm on the far side; the body 0.2 mm off each lane face. If a print makes the
-  dividers bind, open `SKIN_GAP`, `ARM_W` and `BODY_CLEAR` and rebuild; the lock, lip and
-  groove are untouched by these.
-* **Thin, tall features.** The divider's arms are 1.6 x 1.6 mm and 58 mm long, printed
-  lying flat; the 60 mm holes are 2 mm square channels, printed upright. Both are within
-  what FDM prints but are the first things to look at.
-* **Print time.** 228 holes and 228 slits in the tray add many small perimeters.
-* **Slit edges.** The top 3 mm of each lane face is notched every 4 mm; the lane's top is
-  otherwise open. Cards that rub the face at the top of a stack are the thing to watch.
-* **Only 4 mm steps.** A divider position is one of 57; sections are multiples of 4 mm.
-* **The lane faces' smoothness is measured on the mesh at 0.02 mm chord tolerance**, which
-  is fine for flat faces.
-* **The 12-snap lock and the finger ledge** are the 3 x 3 case's, which has been printed
-  with both; the user reports they "work very well" (2026-11-17), so they are not changed.
-* **STL exports are not reproducible** (`solvespace-cli export-mesh` varies run to run);
-  the `.slvs` is, byte for byte.
+* **The full tray is not printed.** The slots, tabs, stagger and fits were proved by the test print; what the full tray
+  adds (four walls, 224 slots, the liners, the shell around them) is verified by mesh only.
+* **Print time** should fall a lot against the first design's 24 h but is not measured.
+* **Thin walls at slots.** 1.5 mm of wall behind a slot, 25 mm tall, in PLA, was fine in the test base; the full tray's
+  partitions are about 233 mm long, supported at both ends, and the liners are backed by the outer wall.
+* **Slot edges.** The top 25 mm of each lane face is notched every 6 mm (2 mm wide, 4 mm of smooth face between); the lane's
+  top is otherwise open. A card edge cannot wedge in a 2 mm slot, but cards that rub the face are the thing to watch.
+* **Only 6 mm steps.** A divider position is one of 37 or 38.
+* **The fits are tight for FDM** (0.2 mm each side in the slot, 0.3 mm at the tip) but fitted in the test, which had a 0.4 mm
+  body clearance. It is now 0.8 mm per side (more room between the body and the lane walls, the tabs 0.4 mm longer so they
+  reach the same 3.2 into the wall): that change is **untested**. A different printer may need the fits opened further (`SLOT_W`, `TAB_REACH`, `BODY_CLEAR`).
+* **STL exports are not reproducible** (`solvespace-cli export-mesh` varies run to run); the `.slvs` is, byte for byte.
 
 ---
 
-## 7. How to rebuild
+## 8. How to rebuild
 
 ```bash
 python3 cad/build_case.py     # writes the three .slvs
@@ -202,6 +179,5 @@ python3 cad/check_case.py     # verifies them
 solvespace-cli export-mesh --chord-tol 0.02 --output deck_case_adjustable_bottom.stl deck_case_adjustable_bottom.slvs
 ```
 
-Dimensions live in `cad/case_params.py`, almost all imported from
-`../mtg-deck-boxes/cad/ugp100_params.py`. The reusable machinery (`slvs_shapes`,
-`slvs_write.translate`, `slvs_check`, `mesh_rays`, `mesh_features`...) is in `../utilities/`.
+Dimensions live in `cad/case_params.py`, almost all imported from `../mtg-deck-boxes/cad/ugp100_params.py`. The reusable
+machinery (`slvs_shapes`, `slvs_write.translate`, `slvs_check`, `mesh_rays`, `mesh_features`...) is in `../utilities/`.

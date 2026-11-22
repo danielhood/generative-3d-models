@@ -18,7 +18,7 @@ import os
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.join(HERE, "..", "..", "..", "utilities"))
+sys.path.insert(0, os.path.join(HERE, "..", "..", "..", "..", "utilities"))
 sys.path.insert(0, HERE)
 
 from slvs_write import (Sketch, UNION, DIFFERENCE, TWO_SIDED, PT_PLANE_DISTANCE,

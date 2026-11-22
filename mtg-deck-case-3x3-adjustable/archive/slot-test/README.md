@@ -1,4 +1,8 @@
-# Slot-and-tab divider: the test pieces
+# Slot-and-tab divider: the test pieces (archived)
+
+**Archived on 2026-11-22: the test print was good, and the full tray now uses this design.** These pieces are
+kept for reference; the current divider and tray are in the folder above. (`slot_test_base.3mf` is the slicer project
+used to print the test.)
 
 A first printed test of the adjustable case (square holes, dividers with arms) found the
 dividers too tight and their arms flexible, and the base took about 24 h to print. The
@@ -8,16 +12,15 @@ faces, 25 mm deep from the wall top, at a 6 mm pitch; the divider's tabs grow to
 so they slide down the slots and hold the divider vertical.
 
 These are the **test pieces** only: one divider and a short single-lane base, to prove
-the fit before the full tray is changed. The full tray and lid in the folder above are
-still the hole-and-arm design (PR #7) and are **not** changed here.
+the fit before the full tray was changed.
 
-**Status: modelled and mesh-verified; not printed.**
+**Status: mesh-verified and printed; the test print was good (2026-11-22).**
 
 | Path | What it is |
 |---|---|
 | `slot_divider.slvs` / `.stl` | the new divider: body, two 25 mm tabs, no arms |
 | `slot_test_base.slvs` / `.stl` | a short base: the middle lane's two partition walls, 1 mm floor, 6 lane slots |
-| `cad/slot_params.py` | every dimension; shared ones come from `../cad/case_params.py` |
+| `cad/slot_params.py` | every dimension; the shared ones come from the main `../../cad/case_params.py` |
 | `cad/build_slot_test.py` | generates both `.slvs` |
 | `cad/check_slot_test.py` | verifies both on the exported meshes, with controls that must fail |
 
@@ -95,8 +98,9 @@ exports. Controls that must fail, and do: a base without slots, slots at the sam
 both faces (cuts the wall through), a divider with tabs reaching 3.6 into the 3.5 slot, and an
 STL of the wrong part.
 
-## What comes next
+## What came next
 
-If the test fits, the full tray changes the same way (slots instead of holes and slits, set A on
-lanes 1 and 3's faces and set B on lane 2's, with the lid unchanged) and the check script, spec and
-README are updated; `case_params.py` already holds the shared dimensions.
+The test fitted, and the full tray was changed the same way: slots instead of holes and slits, set A (37 slots,
+y = -108 to +108) on lanes 1 and 3's faces and set B (38 slots, y = -111 to +111) on lane 2's, the lid unchanged. The
+slot dimensions, the divider and the stagger are exactly these. This folder's scripts import the shared dimensions
+(`LANE_W`, `WALL_T`, `WALL_TOP`, ...) from the main `../../cad/case_params.py`, and still pass against it.
